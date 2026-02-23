@@ -62,15 +62,15 @@ Every claim below is verified by exhaustive search of all `.ts` and `.js` source
 
 - **No arbitrary file reads.** Only reads the files listed above. Does not scan the filesystem, read source code files, read `.env` files, or access files outside the project's `.claude/` directory and `~/.curated-context/`.
 
-- **No environment variable snooping.** Only uses three env vars: `CC_DAEMON` (set internally to flag daemon mode), `CLAUDE_PLUGIN_ROOT` (plugin install location), and the inherited `ANTHROPIC_API_KEY` (consumed by the Anthropic SDK, never read or logged by plugin code).
+- **No environment variable snooping.** Only uses two env vars: `CC_DAEMON` (set internally to flag daemon mode) and `CLAUDE_PLUGIN_ROOT` (plugin install location).
 
-- **No third-party network requests.** Only connects to `127.0.0.1:7377` (its own daemon) and the Anthropic API via the official `@anthropic-ai/sdk`. No telemetry, analytics, error reporting, or phone-home behavior.
+- **No third-party network requests.** Only connects to `127.0.0.1:7377` (its own daemon). Tier 4 extraction uses the `claude` CLI subprocess, which handles its own authentication via the user's existing Claude Code subscription. No telemetry, analytics, error reporting, or phone-home behavior.
 
 - **No dynamic code execution.** No `eval()`, no `Function()` constructor, no `vm` module, no dynamic `require()` or `import()` with user-controlled paths.
 
-- **No shell command injection.** All subprocess spawning uses `spawn('node', [scriptPath])` with array arguments. The single `execSync` call is a hardcoded string (`npm install --omit=dev`) with a fixed `cwd`.
+- **No shell command injection.** All subprocess spawning uses `spawn('node', [scriptPath])` or `execFile('claude', [...args])` with array arguments. The single `execSync` call is a hardcoded string (`npm install --omit=dev`) with a fixed `cwd`.
 
-- **No credential storage.** The Anthropic API key is sourced from the environment by the SDK. The plugin never reads, logs, or persists it.
+- **No credential storage.** No API keys are required or stored. Tier 4 extraction delegates to the `claude` CLI which uses the user's existing authentication.
 
 - **No webviews or UI.** Pure CLI/daemon. No HTML, no browser contexts, no rendered content.
 
@@ -96,20 +96,20 @@ An Express server bound to **`127.0.0.1:7377`** (not `0.0.0.0`):
 - No endpoint returns stored memories or conversation content
 - All client requests use 2-3 second timeouts
 
-### Anthropic API
+### Claude CLI Subprocess (Tier 4 extraction)
 
 | Property | Value |
 |----------|-------|
-| SDK | `@anthropic-ai/sdk@^0.39.0` (official) |
-| Model | `claude-sonnet-4-20250514` |
-| Max tokens | 2,000 |
+| Binary | `claude` (Claude Code CLI) |
+| Invocation | `execFile('claude', ['-p', prompt, '--output-format', 'json', '--max-turns', '1', '--model', 'sonnet'])` |
 | Purpose | Last-resort memory extraction (Tier 4 of 4-tier cascade) |
 | Rate limits | Max 10 calls/hour globally; max 3 calls/project/hour; 5-min cooldown between projects |
-| Data sent | High-signal conversation messages + existing memory keys (for dedup) |
-| Data received | JSON with extracted memories (category, key, value, confidence) |
-| Auth | `ANTHROPIC_API_KEY` environment variable (standard SDK behavior) |
+| Data sent | High-signal conversation messages + existing memory keys (for dedup) — via command-line argument |
+| Data received | JSON with extracted memories (category, key, value, confidence) — via stdout |
+| Auth | Uses the user's existing Claude Code subscription (no separate API key) |
+| Timeout | 60 seconds |
 
-The API is **only called when** the first three extraction tiers (decision log, structural parsing, regex triage) fail to capture decisions from a conversation that scores highly on decision signals.
+The `claude -p` subprocess is **only invoked when** the first three extraction tiers (decision log, structural parsing, regex triage) fail to capture decisions from a conversation that scores highly on decision signals.
 
 ---
 
@@ -117,11 +117,13 @@ The API is **only called when** the first three extraction tiers (decision log, 
 
 | Location | Command | Purpose | Detached? |
 |----------|---------|---------|-----------|
-| `src/cli.ts:51` | `spawn('node', [daemonScript])` | Start daemon (background) | Yes |
-| `src/cli.ts:60` | `spawn('node', [daemonScript])` | Start daemon (foreground) | No |
-| `hooks/process.js:76` | `spawn('node', [daemonScript])` | Auto-start daemon on SessionStart | Yes |
-| `hooks/process.js:61` | `execSync('npm install --omit=dev')` | Lazy dep install (only if `node_modules/` missing) | No (60s timeout) |
-| `src/cli.ts:90` | `process.kill(pid, 'SIGTERM')` | Stop daemon (fallback if HTTP fails) | N/A |
+| `src/cli.ts` | `spawn('node', [daemonScript])` | Start daemon (background) | Yes |
+| `src/cli.ts` | `spawn('node', [daemonScript])` | Start daemon (foreground) | No |
+| `src/extraction/llm.ts` | `execFile('claude', ['-p', ...])` | Tier 4 memory extraction | No (60s timeout) |
+| `src/storage/consolidator.ts` | `execFile('claude', ['-p', ...])` | Memory consolidation | No (60s timeout) |
+| `hooks/process.js` | `spawn('node', [daemonScript])` | Auto-start daemon on SessionStart | Yes |
+| `hooks/process.js` | `execSync('npm install --omit=dev')` | Lazy dep install (only if `node_modules/` missing) | No (60s timeout) |
+| `src/cli.ts` | `process.kill(pid, 'SIGTERM')` | Stop daemon (fallback if HTTP fails) | N/A |
 
 All script paths are derived from the plugin's own installation directory (`import.meta.dirname` or `CLAUDE_PLUGIN_ROOT`), never from user input.
 
@@ -129,9 +131,8 @@ All script paths are derived from the plugin's own installation directory (`impo
 
 ## Dependencies
 
-### Runtime (2 packages)
+### Runtime (1 package)
 
-- **`@anthropic-ai/sdk@^0.39.0`** — Official Anthropic Node.js SDK. Makes HTTPS calls to `api.anthropic.com`.
 - **`express@^5.1.0`** — HTTP framework for the localhost daemon server.
 
 ### Dev-only (not installed in production with `--omit=dev`)
@@ -139,22 +140,23 @@ All script paths are derived from the plugin's own installation directory (`impo
 - `@types/express@^5.0.0`
 - `@types/node@^22.0.0`
 - `typescript@^5.7.0`
+- `vitest@^4.0.18`
 
 ---
 
 ## Threat Model
 
-### Threat 1: Conversation data sent to Anthropic API
+### Threat 1: Conversation data sent via Claude CLI subprocess
 
-**Risk:** High-signal conversation messages are sent to the Anthropic API for memory extraction.
+**Risk:** High-signal conversation messages are passed to `claude -p` for memory extraction.
 **Likelihood:** By design — but only as a last resort (Tier 4).
 **Mitigations:**
 - Only triggered when decision log + structural parsing + regex triage all fail to capture decisions
 - Only messages matching decision-signal patterns are sent (not the full transcript)
 - Rate-limited: max 10 calls/hour, max 3/project/hour, 5-minute cooldown
-- Anthropic's own data handling policies apply
+- Uses the same Claude Code subscription and data policies the user already agreed to
 
-**User action:** Unset `ANTHROPIC_API_KEY` to disable API calls entirely. Review call counts in `~/.curated-context/config.json`.
+**User action:** Review call counts in `~/.curated-context/config.json`.
 
 ### Threat 2: Unencrypted local storage
 
@@ -222,11 +224,11 @@ All script paths are derived from the plugin's own installation directory (`impo
 ### Threat 8: Full environment variable inheritance
 
 **Risk:** The daemon subprocess inherits all parent environment variables via `{ ...process.env, CC_DAEMON: '1' }`.
-**Likelihood:** Low — the daemon only uses environment for the Anthropic SDK.
+**Likelihood:** Low — the daemon makes no direct network calls to external services.
 **Mitigations:**
-- Daemon makes no network calls except to the Anthropic API
+- Daemon only connects to its own localhost server
+- `claude -p` subprocesses inherit the same environment the user's Claude Code already runs in
 - No environment variable logging or persistence
-- No env vars are sent to any third party other than `ANTHROPIC_API_KEY` to Anthropic
 
 ---
 
@@ -265,9 +267,10 @@ Claude Code Session
        |     Regex scoring on messages — filters ~75% of conversations
        |     Only passes conversations with decision-signal score >= 2
        |
-       |-- Tier 4: Claude API (RATE-LIMITED, last resort)
-       |     Sends: high-signal messages + existing memory keys
-       |     Receives: extracted memories as JSON
+       |-- Tier 4: Claude CLI subprocess (RATE-LIMITED, last resort)
+       |     Runs: claude -p --output-format json --max-turns 1 --model sonnet
+       |     Input: high-signal messages + existing memory keys
+       |     Output: extracted memories as JSON
        |     Limits: 10/hour global, 3/project/hour, 5-min cooldown
        |
        v
@@ -286,12 +289,12 @@ Claude Code Session
 |-----------|--------|---------|
 | Read user source files | **NO** | Only reads transcripts, CLAUDE.md, decisions.log, and its own data files |
 | Write user source files | **NO** | Only writes to `.claude/` directories and `CLAUDE.md` |
-| Network (internet) | **LIMITED** | Anthropic API only, rate-limited, official SDK |
+| Network (internet) | **NO** | No direct internet calls. `claude -p` subprocess handles its own network via user's subscription |
 | Network (localhost) | **YES** | Own daemon on `127.0.0.1:7377` |
-| Environment variables | **MINIMAL** | `CC_DAEMON`, `CLAUDE_PLUGIN_ROOT`, inherited `ANTHROPIC_API_KEY` |
+| Environment variables | **MINIMAL** | `CC_DAEMON`, `CLAUDE_PLUGIN_ROOT` |
 | Subprocess execution | **YES** | Own daemon script + one-time `npm install` |
 | File deletion | **LIMITED** | Own session queue files and obsolete `.claude/rules/cc-*.md` files only |
 | Process management | **LIMITED** | Own daemon process only (PID-file based) |
 | Dynamic code execution | **NO** | No eval, Function, vm, or dynamic imports |
-| Credential storage | **NO** | API key from environment only, never persisted or logged |
+| Credential storage | **NO** | No API keys required; `claude` CLI manages its own auth |
 | Telemetry / analytics | **NO** | No tracking of any kind |
