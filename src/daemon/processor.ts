@@ -116,20 +116,25 @@ async function processSession(
     }
   }
 
-  // === Tier 3: Deterministic Triage (free) ===
+  // === Tier 3: Deterministic Triage (advisory) ===
   const triage = triageMessages(transcript.messages);
 
-  // === Tier 4: Claude API (last resort, rate-limited) ===
-  if (triage.shouldProcess && triage.highSignalMessages.length > 0) {
+  // === Tier 4: Classification via claude -p ===
+  // Use triage high-signal messages if available, otherwise send all assistant messages.
+  // claude -p uses the subscription (no API key needed) and classifies better than heuristics.
+  const messagesToClassify = triage.highSignalMessages.length > 0
+    ? triage.highSignalMessages
+    : transcript.messages.filter((m) => m.role === 'assistant' && m.content.length > 50);
+
+  if (messagesToClassify.length > 0) {
     // Check if decision log + structural already captured the gist
     const existingKeys = new Set([
       ...Object.keys(store.memories),
       ...allNewMemories.map((m) => m.key),
     ]);
 
-    // Only call API if there are high-signal messages not already captured
-    const uncapturedMessages = triage.highSignalMessages.filter((msg) => {
-      // Simple heuristic: if any existing memory key appears in the message, it's captured
+    // Filter out messages already captured by existing memories
+    const uncapturedMessages = messagesToClassify.filter((msg) => {
       return !Array.from(existingKeys).some((key) =>
         msg.content.toLowerCase().includes(key.toLowerCase()),
       );
@@ -178,6 +183,10 @@ async function processSession(
 
     // Regenerate output files
     writeRulesFiles(projectRoot, store);
+    writeClaudeMdSection(projectRoot, store);
+  } else {
+    // Bootstrap: write Memory Protocol to CLAUDE.md even with no memories yet,
+    // so the next session knows to write to decisions.log
     writeClaudeMdSection(projectRoot, store);
   }
 }
