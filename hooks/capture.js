@@ -4,12 +4,19 @@
 // Accumulates transcript data to a session file. No API calls.
 // Must be plain JS (no build step) since hooks run directly via node.
 
-import { readFileSync, appendFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
 const CC_DIR = process.env.CC_DIR || join(homedir(), '.curated-context');
 const SESSIONS_DIR = join(CC_DIR, 'sessions');
+
+// Debug: log that the hook was invoked
+try {
+  mkdirSync(CC_DIR, { recursive: true });
+  appendFileSync(join(CC_DIR, 'hook-debug.log'),
+    `[${new Date().toISOString()}] capture.js invoked\n`);
+} catch { /* best effort */ }
 
 // Read hook input from stdin
 let stdinData = '';
@@ -27,6 +34,12 @@ try {
 }
 
 const { transcript_path, session_id } = hookInput;
+
+// Debug: log parsed input
+try {
+  appendFileSync(join(CC_DIR, 'hook-debug.log'),
+    `[${new Date().toISOString()}] input keys: ${Object.keys(hookInput).join(', ')}, transcript_path=${transcript_path}, session_id=${session_id}\n`);
+} catch { /* best effort */ }
 
 if (!transcript_path || !session_id) {
   // Output empty JSON and exit — don't block Claude
@@ -141,7 +154,6 @@ const sessionFile = join(SESSIONS_DIR, `${session_id}.jsonl`);
 appendFileSync(sessionFile, JSON.stringify(event) + '\n');
 
 // Save hash to avoid reprocessing
-const { writeFileSync } = await import('fs');
 writeFileSync(hashFile, transcriptHash);
 
 // Output empty JSON — don't block, don't inject messages
