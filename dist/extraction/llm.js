@@ -1,10 +1,8 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { EXTRACTION_SYSTEM_PROMPT, buildExtractionPrompt } from './prompts.js';
-const execFileAsync = promisify(execFile);
 function ccDir() {
     return process.env.CC_DIR || join(homedir(), '.curated-context');
 }
@@ -26,15 +24,10 @@ export async function extractWithClaude(messages, existingMemories, projectRoot)
     const userContent = buildExtractionPrompt(messages, existingMemories);
     const fullPrompt = `${EXTRACTION_SYSTEM_PROMPT}\n\n${userContent}`;
     try {
-        const { stdout } = await execFileAsync('claude', [
-            '-p', fullPrompt,
-            '--output-format', 'json',
-            '--max-turns', '1',
-            '--model', 'sonnet',
-        ], {
-            timeout: 60_000,
-            maxBuffer: 1024 * 1024,
-        });
+        // Strip CLAUDECODE env var to avoid "cannot launch inside another session" error
+        const cleanEnv = { ...process.env };
+        delete cleanEnv.CLAUDECODE;
+        const stdout = await runClaude(fullPrompt, cleanEnv);
         recordApiCall(projectRoot);
         // claude --output-format json returns { result: "..." }
         const output = JSON.parse(stdout);
@@ -46,6 +39,40 @@ export async function extractWithClaude(messages, existingMemories, projectRoot)
         console.error('[cc] Claude extraction failed:', error);
         return null;
     }
+}
+function runClaude(prompt, env) {
+    return new Promise((resolve, reject) => {
+        const child = spawn('claude', [
+            '-p',
+            '--output-format', 'json',
+            '--max-turns', '1',
+            '--model', 'sonnet',
+        ], {
+            env,
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (data) => { stdout += data.toString(); });
+        child.stderr.on('data', (data) => { stderr += data.toString(); });
+        child.on('close', (code) => {
+            if (code === 0) {
+                resolve(stdout);
+            }
+            else {
+                reject(new Error(`claude exited with code ${code}: ${stderr}`));
+            }
+        });
+        child.on('error', reject);
+        // Send prompt via stdin
+        child.stdin.write(prompt);
+        child.stdin.end();
+        // Timeout after 60 seconds
+        setTimeout(() => {
+            child.kill('SIGTERM');
+            reject(new Error('claude -p timed out after 60s'));
+        }, 60_000);
+    });
 }
 export function parseExtractionResponse(text) {
     // Extract JSON from response (may have surrounding text)

@@ -54,7 +54,8 @@ mkdirSync(SESSIONS_DIR, { recursive: true });
 let transcriptRaw;
 try {
   transcriptRaw = readFileSync(transcript_path, 'utf8');
-} catch {
+} catch (err) {
+  try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] FAILED to read transcript: ${err}\n`); } catch {}
   process.stdout.write('{}');
   process.exit(0);
 }
@@ -68,11 +69,12 @@ const transcriptHash = hash.toString(36);
 
 // Check if we already processed this exact transcript state
 const hashFile = join(SESSIONS_DIR, `${session_id}.hash`);
+try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] transcript read OK (${transcriptRaw.length} bytes), hash=${transcriptHash}\n`); } catch {}
 if (existsSync(hashFile)) {
   try {
     const lastHash = readFileSync(hashFile, 'utf8').trim();
     if (lastHash === transcriptHash) {
-      // Transcript unchanged since last capture — skip
+      try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] hash unchanged — skipping\n`); } catch {}
       process.stdout.write('{}');
       process.exit(0);
     }
@@ -134,7 +136,14 @@ for (const line of lines) {
   }
 }
 
+// Debug: log parsing results
+try {
+  appendFileSync(join(CC_DIR, 'hook-debug.log'),
+    `[${new Date().toISOString()}] parsed: ${lines.length} lines, ${messages.length} messages, ${toolEvents.length} tool events, projectRoot=${projectRoot}\n`);
+} catch {}
+
 if (messages.length === 0) {
+  try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] NO messages found — exiting\n`); } catch {}
   process.stdout.write('{}');
   process.exit(0);
 }
@@ -151,10 +160,14 @@ const event = {
 };
 
 const sessionFile = join(SESSIONS_DIR, `${session_id}.jsonl`);
-appendFileSync(sessionFile, JSON.stringify(event) + '\n');
-
-// Save hash to avoid reprocessing
-writeFileSync(hashFile, transcriptHash);
+try {
+  appendFileSync(sessionFile, JSON.stringify(event) + '\n');
+  // Save hash to avoid reprocessing
+  writeFileSync(hashFile, transcriptHash);
+  try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] SUCCESS: wrote session file ${sessionFile}\n`); } catch {}
+} catch (err) {
+  try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] FAILED to write session: ${err}\n`); } catch {}
+}
 
 // Output empty JSON — don't block, don't inject messages
 process.stdout.write('{}');
