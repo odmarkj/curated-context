@@ -3,8 +3,9 @@ set -e
 
 echo "Setting up curated-context..."
 
-# Register as a Claude Code plugin
-claude plugin add "$(pwd)"
+# Add local directory as a marketplace and install the plugin
+claude plugin marketplace add "$(pwd)"
+claude plugin install curated-context
 
 echo ""
 echo "curated-context installed! The hooks are now active."

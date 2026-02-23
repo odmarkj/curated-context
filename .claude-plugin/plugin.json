@@ -1,5 +1,6 @@
 {
   "name": "curated-context",
+  "version": "0.1.0",
   "description": "Intelligent memory sidecar — passively captures project decisions and writes them into files Claude Code reads on every session",
   "author": {
     "name": "odmarkj"

@@ -1,0 +1,17 @@
+{
+  "name": "curated-context",
+  "owner": {
+    "name": "odmarkj"
+  },
+  "metadata": {
+    "description": "Intelligent memory sidecar for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "curated-context",
+      "source": "./",
+      "description": "Passively captures project decisions and writes them into files Claude Code reads on every session",
+      "version": "0.1.0"
+    }
+  ]
+}

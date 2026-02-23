@@ -58,10 +58,14 @@ You end up re-explaining the same decisions in every session. Over and over.
 ## Quick Start
 
 ```bash
-claude plugin add --from github:odmarkj/curated-context
+# Add the marketplace
+claude plugin marketplace add odmarkj/curated-context
+
+# Install the plugin
+claude plugin install curated-context
 ```
 
-That's it. One command. No configuration needed.
+That's it. Two commands. No configuration needed.
 
 ---
 
@@ -74,7 +78,7 @@ curated-context uses a **4-tier cascading pipeline** designed to minimize API co
 | 1 | **Memory Protocol** | Free | Claude self-reports decisions to `.claude/decisions.log` |
 | 2 | **Structural Extraction** | Free | CSS variables, dependencies, configs, API routes from file writes |
 | 3 | **Deterministic Triage** | Free | Regex/keyword scoring filters ~75% of conversation noise |
-| 4 | **Claude API** | Your Claude Code sub | Ambiguous conversational decisions only (max 10 calls/hour) |
+| 4 | **Claude via `claude -p`** | Your Claude Code sub | Ambiguous conversational decisions (max 30 calls/hour) |
 
 ### What gets captured
 
@@ -163,7 +167,16 @@ curated-context promote <key>                    # Move project memory to global
 ### Installation
 
 ```bash
-claude plugin add --from github:odmarkj/curated-context
+# Add the marketplace (one time)
+claude plugin marketplace add odmarkj/curated-context
+
+# Install the plugin
+claude plugin install curated-context
+```
+
+For local development, you can also load directly:
+```bash
+claude --plugin-dir /path/to/curated-context
 ```
 
 ### Verify installation
