@@ -1,7 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { loadStore, saveStore } from './memory-store.js';
 import { writeRulesFiles } from './rules-writer.js';
 import { writeClaudeMdSection } from './claude-md.js';
+const execFileAsync = promisify(execFile);
 const CONSOLIDATION_THRESHOLD = 20; // Consolidate every N extractions
 const MAX_ENTRIES_BEFORE_CONSOLIDATION = 100;
 /**
@@ -27,7 +29,6 @@ export async function consolidateMemories(projectRoot) {
     const memories = Object.values(store.memories);
     if (memories.length < 5)
         return; // Not enough to consolidate
-    const client = new Anthropic();
     const memoriesJson = memories.map((m) => ({
         key: m.key,
         category: m.category,
@@ -35,11 +36,7 @@ export async function consolidateMemories(projectRoot) {
         confidence: m.confidence,
         age_days: Math.floor((Date.now() - m.updatedAt) / 86400_000),
     }));
-    try {
-        const response = await client.messages.create({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 2000,
-            system: `You are a memory consolidation agent. Given a set of project memories:
+    const prompt = `You are a memory consolidation agent. Given a set of project memories:
 
 1. Merge duplicates (same concept under different keys) — keep the more descriptive one
 2. Resolve contradictions — prefer newer entries (lower age_days)
@@ -53,18 +50,22 @@ Return JSON only:
   ],
   "removed_keys": ["keys that were merged or removed"],
   "reason": "brief summary of changes"
-}`,
-            messages: [
-                {
-                    role: 'user',
-                    content: JSON.stringify(memoriesJson),
-                },
-            ],
+}
+
+Memories to consolidate:
+${JSON.stringify(memoriesJson)}`;
+    try {
+        const { stdout } = await execFileAsync('claude', [
+            '-p', prompt,
+            '--output-format', 'json',
+            '--max-turns', '1',
+            '--model', 'sonnet',
+        ], {
+            timeout: 60_000,
+            maxBuffer: 1024 * 1024,
         });
-        const text = response.content
-            .filter((c) => c.type === 'text')
-            .map((c) => c.text)
-            .join('');
+        const output = JSON.parse(stdout);
+        const text = typeof output.result === 'string' ? output.result : stdout;
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch)
             return;

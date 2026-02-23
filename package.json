@@ -15,7 +15,6 @@
     "setup": "npm install && claude plugin add $(pwd)"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
     "express": "^5.1.0"
   },
   "devDependencies": {

@@ -59,14 +59,10 @@ You end up re-explaining the same decisions in every session. Over and over.
 ## Quick Start
 
 ```bash
-# Clone into Claude Code's plugin directory
-git clone https://github.com/odmarkj/curated-context.git ~/.claude/plugins/curated-context
-
-# Register the plugin
-claude plugin add ~/.claude/plugins/curated-context
+claude plugin add --from github:odmarkj/curated-context
 ```
 
-That's it. Dependencies install automatically on first session start. No configuration needed.
+That's it. One command. No configuration needed.
 
 ---
 
@@ -79,7 +75,7 @@ curated-context uses a **4-tier cascading pipeline** designed to minimize API co
 | 1 | **Memory Protocol** | Free | Claude self-reports decisions to `.claude/decisions.log` |
 | 2 | **Structural Extraction** | Free | CSS variables, dependencies, configs, API routes from file writes |
 | 3 | **Deterministic Triage** | Free | Regex/keyword scoring filters ~75% of conversation noise |
-| 4 | **Claude API** | Rate-limited | Ambiguous conversational decisions only (max 10 calls/hour) |
+| 4 | **Claude API** | Your Claude Code sub | Ambiguous conversational decisions only (max 10 calls/hour) |
 
 ### What gets captured
 
@@ -130,7 +126,7 @@ Claude Code Session
 
 - **Hooks over MCP** — The main Claude session never knows memory extraction is happening. Hooks fire automatically; the sidecar processes independently.
 - **Deferred processing** — Transcripts accumulate during sessions. Processing happens on next session start, so your active rate limits are never touched.
-- **Sonnet for extraction** — Well-scoped classification work. Fast and cheap enough to not matter, yet accurate enough to be useful.
+- **Sonnet via `claude -p`** — Uses your existing Claude Code subscription. No separate API key needed. Well-scoped classification work, fast and accurate.
 - **Marker-based CLAUDE.md** — Users can see and edit auto-managed sections. Deleting the markers opts out. The daemon never clobbers manual content.
 
 ---
@@ -162,8 +158,7 @@ curated-context forget <key>     # Remove a specific memory
 ### Installation
 
 ```bash
-git clone https://github.com/odmarkj/curated-context.git ~/.claude/plugins/curated-context
-claude plugin add ~/.claude/plugins/curated-context
+claude plugin add --from github:odmarkj/curated-context
 ```
 
 ### Verify installation
@@ -199,23 +194,12 @@ your-project/
 
 These files are automatically read by Claude Code on every session start.
 
-### Optional: Anthropic API key
-
-For Tier 4 extraction (ambiguous conversational decisions), set your API key:
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-```
-
-Without this, Tiers 1-3 still capture the majority of decisions at zero cost.
-
 ---
 
 ## System Requirements
 
 - **Node.js** >= 20.0.0
 - **Claude Code** with plugin support
-- **Anthropic API key** — optional, only needed for Tier 4 API extraction (set via `ANTHROPIC_API_KEY` environment variable)
 
 ---
 

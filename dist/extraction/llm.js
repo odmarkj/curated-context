@@ -1,8 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { EXTRACTION_SYSTEM_PROMPT, buildExtractionPrompt } from './prompts.js';
+const execFileAsync = promisify(execFile);
 const CC_DIR = join(homedir(), '.curated-context');
 const CONFIG_PATH = join(CC_DIR, 'config.json');
 const MAX_CALLS_PER_HOUR = 10;
@@ -17,25 +19,27 @@ export async function extractWithClaude(messages, existingMemories, projectRoot)
     if (!canMakeApiCall(projectRoot)) {
         return null;
     }
-    const client = new Anthropic();
     const userContent = buildExtractionPrompt(messages, existingMemories);
+    const fullPrompt = `${EXTRACTION_SYSTEM_PROMPT}\n\n${userContent}`;
     try {
-        const response = await client.messages.create({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 2000,
-            system: EXTRACTION_SYSTEM_PROMPT,
-            messages: [{ role: 'user', content: userContent }],
+        const { stdout } = await execFileAsync('claude', [
+            '-p', fullPrompt,
+            '--output-format', 'json',
+            '--max-turns', '1',
+            '--model', 'sonnet',
+        ], {
+            timeout: 60_000,
+            maxBuffer: 1024 * 1024,
         });
         recordApiCall(projectRoot);
-        const text = response.content
-            .filter((c) => c.type === 'text')
-            .map((c) => c.text)
-            .join('');
+        // claude --output-format json returns { result: "..." }
+        const output = JSON.parse(stdout);
+        const text = typeof output.result === 'string' ? output.result : stdout;
         return parseExtractionResponse(text);
     }
     catch (error) {
         // Log but don't throw — extraction is best-effort
-        console.error('[cc] Claude API extraction failed:', error);
+        console.error('[cc] Claude extraction failed:', error);
         return null;
     }
 }
