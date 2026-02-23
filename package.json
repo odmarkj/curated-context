@@ -1,0 +1,29 @@
+{
+  "name": "curated-context",
+  "version": "0.1.0",
+  "description": "Intelligent memory sidecar for Claude Code",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "dist/daemon/index.js",
+  "bin": {
+    "curated-context": "./bin/curated-context.js"
+  },
+  "scripts": {
+    "build": "tsc",
+"dev": "tsc --watch",
+    "start": "node dist/daemon/index.js",
+    "setup": "npm install && claude plugin add $(pwd)"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,38 @@
+const DECISION_SIGNALS = [
+    /(?:let's|we'll|I'll|going to|decided to|switching to|using)\s+/i,
+    /(?:the (?:primary|accent|background) color|theme|font|layout)\s+(?:is|should be|will be)/i,
+    /(?:we're using|stack is|chose|picked|going with)\s+/i,
+    /(?:header|footer|sidebar|nav|api|endpoint|route|schema)\s+(?:should|will|must)/i,
+    /(?:convention|pattern|standard|rule):\s+/i,
+    /(?:always|never|prefer|avoid)\s+/i,
+    /(?:architecture|design system|component library|state management)/i,
+    /(?:database|orm|authentication|authorization)\s+(?:is|uses?|with)/i,
+];
+const NOISE_SIGNALS = [
+    /(?:let me try|hmm|actually wait|no that's wrong|error:|failed)/i,
+    /(?:can you|what if|maybe|not sure|I'm not certain)/i,
+    /(?:reading file|searching|listing|looking at)/i,
+    /(?:debugging|troubleshoot|fix(?:ing)?|broke|broken)/i,
+    /(?:oops|sorry|mistake|undo|revert)/i,
+];
+/**
+ * Deterministic triage — score conversation messages by decision signal density.
+ * Zero API calls. Filters out ~75% of turns.
+ */
+export function triageMessages(messages) {
+    // Focus on recent messages (last 10 turns)
+    const recent = messages.slice(-10);
+    const text = recent.map((m) => m.content).join(' ');
+    const decisionScore = DECISION_SIGNALS.reduce((score, re) => score + (re.test(text) ? 1 : 0), 0);
+    const noiseScore = NOISE_SIGNALS.reduce((score, re) => score + (re.test(text) ? 1 : 0), 0);
+    const shouldProcess = decisionScore >= 2 && decisionScore > noiseScore;
+    // Extract the specific messages with high signal
+    const highSignalMessages = shouldProcess
+        ? recent.filter((m) => {
+            const msgDecision = DECISION_SIGNALS.reduce((s, re) => s + (re.test(m.content) ? 1 : 0), 0);
+            return msgDecision >= 1;
+        })
+        : [];
+    return { shouldProcess, decisionScore, noiseScore, highSignalMessages };
+}
+//# sourceMappingURL=triage.js.map

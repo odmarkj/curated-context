@@ -1,0 +1,1 @@
+{"version":3,"file":"lifecycle.d.ts","sourceRoot":"","sources":["../../src/daemon/lifecycle.ts"],"names":[],"mappings":"AAOA,wBAAgB,QAAQ,IAAI,IAAI,CAG/B;AAED,wBAAgB,QAAQ,IAAI,IAAI,CAQ/B;AAED,wBAAgB,eAAe,IAAI;IAAE,OAAO,EAAE,OAAO,CAAC;IAAC,GAAG,CAAC,EAAE,MAAM,CAAA;CAAE,CAmBpE;AAED,wBAAgB,UAAU,IAAI,MAAM,CAEnC;AAED,wBAAgB,UAAU,IAAI,MAAM,CAEnC"}

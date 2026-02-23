@@ -1,0 +1,1 @@
+{"version":3,"file":"processor.d.ts","sourceRoot":"","sources":["../../src/daemon/processor.ts"],"names":[],"mappings":"AAWA,UAAU,eAAe;IACvB,iBAAiB,EAAE,MAAM,CAAC;IAC1B,uBAAuB,EAAE,MAAM,CAAC;IAChC,sBAAsB,EAAE,MAAM,CAAC;IAC/B,eAAe,EAAE,MAAM,CAAC;IACxB,YAAY,EAAE,MAAM,CAAC;CACtB;AAED;;GAEG;AACH,wBAAsB,YAAY,IAAI,OAAO,CAAC,eAAe,CAAC,CAuB7D"}
