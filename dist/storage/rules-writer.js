@@ -1,16 +1,20 @@
 import { writeFileSync, mkdirSync, unlinkSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
 import { getMemoriesByCategory } from './memory-store.js';
 const RULES_PREFIX = 'cc-';
 const MAX_RULES_FILE_SIZE = 1024; // 1KB per file
 /**
  * Write categorized memory files to .claude/rules/cc-<category>.md
- * These are auto-loaded by Claude Code and support path scoping.
+ * For projects: <projectRoot>/.claude/rules/
+ * For global (__global__): ~/.claude/rules/
  */
 export function writeRulesFiles(projectRoot, store) {
-    if (!projectRoot || projectRoot === '__global__')
+    if (!projectRoot)
         return;
-    const rulesDir = join(projectRoot, '.claude', 'rules');
+    const rulesDir = projectRoot === '__global__'
+        ? join(homedir(), '.claude', 'rules')
+        : join(projectRoot, '.claude', 'rules');
     mkdirSync(rulesDir, { recursive: true });
     const grouped = getMemoriesByCategory(store);
     const writtenCategories = new Set();

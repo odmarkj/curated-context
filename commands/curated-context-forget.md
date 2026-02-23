@@ -26,6 +26,13 @@ If the argument matches a category (architecture, design, api, conventions, conf
 3. Write the updated store back
 4. Delete the corresponding `.claude/rules/cc-<category>.md` file
 
+## Global memories
+
+To forget a global memory, add `--global` flag:
+```bash
+node <find the cli.js in the plugin dist> forget "$ARGUMENTS" --global
+```
+
 ## Confirmation
 
 Always show what will be removed and ask for confirmation before proceeding.

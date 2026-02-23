@@ -8,10 +8,10 @@ import { readdirSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const CC_DIR = join(homedir(), '.curated-context');
+const CC_DIR = process.env.CC_DIR || join(homedir(), '.curated-context');
 const SESSIONS_DIR = join(CC_DIR, 'sessions');
 const PID_FILE = join(CC_DIR, 'daemon.pid');
-const DAEMON_PORT = 7377;
+const DAEMON_PORT = parseInt(process.env.CC_PORT || '7377', 10);
 
 // Read stdin (required by hook protocol) but we don't need it
 try {

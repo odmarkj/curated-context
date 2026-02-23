@@ -8,7 +8,7 @@ import { readFileSync, appendFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const CC_DIR = join(homedir(), '.curated-context');
+const CC_DIR = process.env.CC_DIR || join(homedir(), '.curated-context');
 const SESSIONS_DIR = join(CC_DIR, 'sessions');
 
 // Read hook input from stdin

@@ -4,7 +4,7 @@ import { writePid, clearPid, getLogPath } from './lifecycle.js';
 import { processQueue } from './processor.js';
 import { getQueueDepth } from './queue.js';
 
-const PORT = 7377;
+const PORT = parseInt(process.env.CC_PORT || '7377', 10);
 const app = express();
 
 let isProcessing = false;

@@ -23,13 +23,14 @@ Interpret the argument as a memory management request:
 
 - **"what do you remember about X?"** — Search memories for keywords matching X
 - **"forget X"** — Remove the memory with key X from the store, then regenerate output files by running: `node <plugin-root>/dist/cli.js forget "X"`
-- **"promote X to global"** — Move a project memory to the global store
+- **"promote X to global"** — Move a project memory to the global store by running: `node <plugin-root>/dist/cli.js promote "X"`
 - **"show all"** — List every memory with full details (category, confidence, age, source)
 
 ## Memory Store Location
 
 - Project memories: `~/.curated-context/store/<hash>.json`
 - Global memories: `~/.curated-context/store/global.json`
+- Global rules: `~/.claude/rules/cc-*.md`
 - Decision log: `.claude/decisions.log`
 - Output rules: `.claude/rules/cc-*.md`
 

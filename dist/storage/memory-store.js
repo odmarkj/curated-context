@@ -2,8 +2,10 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from '
 import { join } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
-const CC_DIR = join(homedir(), '.curated-context');
-const STORE_DIR = join(CC_DIR, 'store');
+function storeDir() {
+    const ccDir = process.env.CC_DIR || join(homedir(), '.curated-context');
+    return join(ccDir, 'store');
+}
 const MAX_ENTRIES_PROJECT = 200;
 const MAX_ENTRIES_GLOBAL = 100;
 function projectHash(projectRoot) {
@@ -12,10 +14,11 @@ function projectHash(projectRoot) {
     return createHash('md5').update(projectRoot).digest('hex').slice(0, 12);
 }
 function storePath(projectRoot) {
-    return join(STORE_DIR, `${projectHash(projectRoot)}.json`);
+    return join(storeDir(), `${projectHash(projectRoot)}.json`);
 }
 export function loadStore(projectRoot) {
-    mkdirSync(STORE_DIR, { recursive: true });
+    const dir = storeDir();
+    mkdirSync(dir, { recursive: true });
     const path = storePath(projectRoot);
     if (existsSync(path)) {
         try {
@@ -34,7 +37,8 @@ export function loadStore(projectRoot) {
     };
 }
 export function saveStore(projectRoot, store) {
-    mkdirSync(STORE_DIR, { recursive: true });
+    const dir = storeDir();
+    mkdirSync(dir, { recursive: true });
     const path = storePath(projectRoot);
     const isGlobal = projectRoot === '__global__';
     const maxEntries = isGlobal ? MAX_ENTRIES_GLOBAL : MAX_ENTRIES_PROJECT;

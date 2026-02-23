@@ -12,6 +12,8 @@ const MEMORY_PROTOCOL = `## Memory Protocol
 When you make a project decision (architecture, design tokens, conventions,
 API patterns, tech stack), append a one-line summary to \`.claude/decisions.log\`:
 \`[category] key: value\`
+For cross-project preferences (coding style, tool prefs, workflow patterns), use:
+\`[global:category] key: value\`
 Only log deliberate decisions, not exploratory steps.`;
 
 /**
@@ -24,7 +26,7 @@ export function writeClaudeMdSection(
 ): void {
   const claudeMdPath = projectRoot
     ? resolveProjectClaudeMd(projectRoot)
-    : join(homedir(), '.claude', 'CLAUDE.md');
+    : process.env.CC_GLOBAL_CLAUDE_MD || join(homedir(), '.claude', 'CLAUDE.md');
 
   let content = '';
   if (existsSync(claudeMdPath)) {
@@ -89,13 +91,18 @@ function generateManagedSection(store: MemoryStore, isProject: boolean): string 
   }
 
   if (summary) {
-    parts.push('## Project Context (auto-managed by curated-context)');
+    const heading = isProject
+      ? '## Project Context (auto-managed by curated-context)'
+      : '## Global Context (auto-managed by curated-context)';
+    parts.push(heading);
     parts.push('');
     parts.push(summary);
     parts.push('');
 
     if (isProject) {
       parts.push('_See .claude/rules/cc-*.md for details._');
+    } else {
+      parts.push('_See ~/.claude/rules/cc-*.md for details._');
     }
   }
 

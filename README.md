@@ -1,8 +1,7 @@
-<!-- TODO: Add logo -->
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="TODO-logo-dark.svg">
-    <img alt="curated-context" src="TODO-logo-light.svg" width="400">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img alt="Curated Context" src="assets/logo-light.svg" width="400">
   </picture>
 </p>
 
@@ -137,18 +136,24 @@ Claude Code Session
 
 | Command | Description |
 |---------|-------------|
-| `/curated-context` | Query and manage memories for the current project |
+| `/curated` | Show a summary of all memories for the current project |
+| `/curated:teach <memory>` | Manually teach a memory (e.g., `/curated:teach design primary-color "#2563EB"`) |
+| `/curated:search <query>` | Search memories by keyword |
+| `/curated-context` | Query and manage memories (verbose mode) |
 | `/curated-context:status` | Daemon health, queue depth, and API usage |
 | `/curated-context:forget <key>` | Remove a specific memory |
 
 ### CLI
 
 ```bash
-curated-context start [-d]       # Start daemon (foreground, or -d for background)
-curated-context stop             # Stop daemon
-curated-context status           # Daemon health + memory counts
-curated-context memories         # List all memories for current project
-curated-context forget <key>     # Remove a specific memory
+curated-context start [-d]                       # Start daemon (foreground, or -d for background)
+curated-context stop                             # Stop daemon
+curated-context status                           # Daemon health + memory counts
+curated-context memories [--global]              # List all memories
+curated-context teach <category> <key> <value>   # Manually add a memory
+curated-context search <query>                   # Search memories by keyword
+curated-context forget <key> [--global]          # Remove a specific memory
+curated-context promote <key>                    # Move project memory to global store
 ```
 
 ---

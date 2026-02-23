@@ -109,7 +109,11 @@ ${JSON.stringify(memoriesJson)}`;
 
     saveStore(projectRoot, store);
     writeRulesFiles(projectRoot, store);
-    writeClaudeMdSection(projectRoot, store);
+    if (projectRoot === '__global__') {
+      writeClaudeMdSection(null, store);
+    } else {
+      writeClaudeMdSection(projectRoot, store);
+    }
 
     console.log(
       `[cc] Consolidated ${memories.length} → ${Object.keys(newMemories).length} memories` +

@@ -2,8 +2,13 @@ import { readdirSync, readFileSync, unlinkSync, existsSync, mkdirSync } from 'fs
 import { join } from 'path';
 import { homedir } from 'os';
 
-const CC_DIR = join(homedir(), '.curated-context');
-const SESSIONS_DIR = join(CC_DIR, 'sessions');
+function ccDir(): string {
+  return process.env.CC_DIR || join(homedir(), '.curated-context');
+}
+
+function sessionsDir(): string {
+  return join(ccDir(), 'sessions');
+}
 
 export interface SessionEvent {
   timestamp: number;
@@ -23,17 +28,18 @@ export interface PendingSession {
 }
 
 export function ensureDirectories(): void {
-  mkdirSync(SESSIONS_DIR, { recursive: true });
+  mkdirSync(sessionsDir(), { recursive: true });
 }
 
 export function getPendingSessions(): PendingSession[] {
   ensureDirectories();
 
-  const files = readdirSync(SESSIONS_DIR).filter((f) => f.endsWith('.jsonl'));
+  const dir = sessionsDir();
+  const files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
   const sessions: PendingSession[] = [];
 
   for (const file of files) {
-    const filePath = join(SESSIONS_DIR, file);
+    const filePath = join(dir, file);
     const sessionId = file.replace('.jsonl', '');
 
     try {
@@ -64,8 +70,9 @@ export function getPendingSessions(): PendingSession[] {
 }
 
 export function markSessionProcessed(sessionId: string): void {
-  const sessionFile = join(SESSIONS_DIR, `${sessionId}.jsonl`);
-  const hashFile = join(SESSIONS_DIR, `${sessionId}.hash`);
+  const dir = sessionsDir();
+  const sessionFile = join(dir, `${sessionId}.jsonl`);
+  const hashFile = join(dir, `${sessionId}.hash`);
 
   try {
     if (existsSync(sessionFile)) unlinkSync(sessionFile);
@@ -81,7 +88,7 @@ export function markSessionProcessed(sessionId: string): void {
 
 export function getQueueDepth(): number {
   try {
-    return readdirSync(SESSIONS_DIR).filter((f) => f.endsWith('.jsonl')).length;
+    return readdirSync(sessionsDir()).filter((f) => f.endsWith('.jsonl')).length;
   } catch {
     return 0;
   }

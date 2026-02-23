@@ -1,16 +1,19 @@
 import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-const CC_DIR = join(homedir(), '.curated-context');
-const PID_FILE = join(CC_DIR, 'daemon.pid');
+function ccDir() {
+    return process.env.CC_DIR || join(homedir(), '.curated-context');
+}
 export function writePid() {
-    mkdirSync(CC_DIR, { recursive: true });
-    writeFileSync(PID_FILE, String(process.pid));
+    const dir = ccDir();
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'daemon.pid'), String(process.pid));
 }
 export function clearPid() {
     try {
-        if (existsSync(PID_FILE)) {
-            unlinkSync(PID_FILE);
+        const pidFile = join(ccDir(), 'daemon.pid');
+        if (existsSync(pidFile)) {
+            unlinkSync(pidFile);
         }
     }
     catch {
@@ -18,11 +21,12 @@ export function clearPid() {
     }
 }
 export function isDaemonRunning() {
-    if (!existsSync(PID_FILE)) {
+    const pidFile = join(ccDir(), 'daemon.pid');
+    if (!existsSync(pidFile)) {
         return { running: false };
     }
     try {
-        const pid = parseInt(readFileSync(PID_FILE, 'utf8').trim(), 10);
+        const pid = parseInt(readFileSync(pidFile, 'utf8').trim(), 10);
         if (isNaN(pid) || pid <= 0) {
             return { running: false };
         }
@@ -37,9 +41,9 @@ export function isDaemonRunning() {
     }
 }
 export function getLogPath() {
-    return join(CC_DIR, 'daemon.log');
+    return join(ccDir(), 'daemon.log');
 }
 export function getDataDir() {
-    return CC_DIR;
+    return ccDir();
 }
 //# sourceMappingURL=lifecycle.js.map

@@ -5,14 +5,18 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { EXTRACTION_SYSTEM_PROMPT, buildExtractionPrompt } from './prompts.js';
 const execFileAsync = promisify(execFile);
-const CC_DIR = join(homedir(), '.curated-context');
-const CONFIG_PATH = join(CC_DIR, 'config.json');
-const MAX_CALLS_PER_HOUR = 10;
-const MAX_CALLS_PER_SESSION = 3;
-const PROJECT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+function ccDir() {
+    return process.env.CC_DIR || join(homedir(), '.curated-context');
+}
+function configPath() {
+    return join(ccDir(), 'config.json');
+}
+const MAX_CALLS_PER_HOUR = 30;
+const MAX_CALLS_PER_SESSION = 10;
+const PROJECT_COOLDOWN_MS = 60 * 1000; // 1 minute
 /**
- * Claude API extractor — batched, rate-limited, last resort.
- * Only called when decision log + structural + triage leave gaps.
+ * Classification via `claude -p` (uses Claude Code subscription, no API key needed).
+ * Called when decision log + structural + triage leave gaps.
  */
 export async function extractWithClaude(messages, existingMemories, projectRoot) {
     // Check rate limits
@@ -43,7 +47,7 @@ export async function extractWithClaude(messages, existingMemories, projectRoot)
         return null;
     }
 }
-function parseExtractionResponse(text) {
+export function parseExtractionResponse(text) {
     // Extract JSON from response (may have surrounding text)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -68,10 +72,10 @@ function parseExtractionResponse(text) {
     }
 }
 function loadApiUsage() {
-    mkdirSync(CC_DIR, { recursive: true });
+    mkdirSync(ccDir(), { recursive: true });
     try {
-        if (existsSync(CONFIG_PATH)) {
-            const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
+        if (existsSync(configPath())) {
+            const config = JSON.parse(readFileSync(configPath(), 'utf8'));
             return config.apiUsage ?? createFreshUsage();
         }
     }
@@ -81,18 +85,18 @@ function loadApiUsage() {
     return createFreshUsage();
 }
 function saveApiUsage(usage) {
-    mkdirSync(CC_DIR, { recursive: true });
+    mkdirSync(ccDir(), { recursive: true });
     let config = {};
     try {
-        if (existsSync(CONFIG_PATH)) {
-            config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
+        if (existsSync(configPath())) {
+            config = JSON.parse(readFileSync(configPath(), 'utf8'));
         }
     }
     catch {
         // Start fresh
     }
     config.apiUsage = usage;
-    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+    writeFileSync(configPath(), JSON.stringify(config, null, 2));
 }
 function createFreshUsage() {
     return {

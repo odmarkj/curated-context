@@ -1,6 +1,6 @@
 import { existsSync } from 'fs';
 import { parseTranscript } from '../extraction/transcript.js';
-import { parseDecisionLog, clearDecisionLog } from '../extraction/decision-log.js';
+import { parseDecisionLog, clearDecisionLog, parseGlobalDecisionLog, clearGlobalDecisionLog } from '../extraction/decision-log.js';
 import { extractStructural } from '../extraction/structural.js';
 import { triageMessages } from '../extraction/triage.js';
 import { extractWithClaude, type Memory, type ExtractionResult } from '../extraction/llm.js';
@@ -52,13 +52,25 @@ async function processSession(
 ): Promise<void> {
   if (!existsSync(transcriptPath)) return;
 
+  // Parse transcript early — needed for sessionId across all tiers
+  const transcript = parseTranscript(transcriptPath);
+
   // Load existing store for this project
   const store = loadStore(projectRoot);
   const allNewMemories: Memory[] = [];
 
   // === Tier 1: Decision Log (highest signal, free) ===
   const decisionLogEntries = parseDecisionLog(projectRoot);
-  for (const entry of decisionLogEntries) {
+  const globalDecisionLogEntries = parseGlobalDecisionLog();
+
+  // Partition project decision log entries by scope
+  const projectEntries = decisionLogEntries.filter((e) => e.scope === 'project');
+  const globalFromProject = decisionLogEntries.filter((e) => e.scope === 'global');
+
+  // All entries from the global log are global-scoped
+  const allGlobalEntries = [...globalFromProject, ...globalDecisionLogEntries];
+
+  for (const entry of projectEntries) {
     allNewMemories.push({
       category: entry.category,
       key: entry.key,
@@ -66,15 +78,33 @@ async function processSession(
       confidence: entry.confidence,
     });
   }
-  stats.memoriesFromDecisionLog += decisionLogEntries.length;
 
-  // Clear the decision log after reading
+  // Route global decision log entries to global store
+  if (allGlobalEntries.length > 0) {
+    const globalStore = loadStore('__global__');
+    const globalMemories: Memory[] = allGlobalEntries.map((e) => ({
+      category: e.category,
+      key: e.key,
+      value: e.value,
+      confidence: e.confidence,
+    }));
+    applyMemories(globalStore, globalMemories, transcript.sessionId);
+    saveStore('__global__', globalStore);
+    writeRulesFiles('__global__', globalStore);
+    writeClaudeMdSection(null, globalStore);
+  }
+
+  stats.memoriesFromDecisionLog += projectEntries.length + allGlobalEntries.length;
+
+  // Clear decision logs after reading
   if (decisionLogEntries.length > 0) {
     clearDecisionLog(projectRoot);
   }
+  if (globalDecisionLogEntries.length > 0) {
+    clearGlobalDecisionLog();
+  }
 
   // === Tier 2: Structural Extraction (free) ===
-  const transcript = parseTranscript(transcriptPath);
   const structuralMemories = extractStructural(transcript.toolEvents);
 
   // Only add structural memories that aren't already covered by decision log
@@ -129,7 +159,8 @@ async function processSession(
           const globalStore = loadStore('__global__');
           applyMemories(globalStore, apiResult.global_memories, transcript.sessionId);
           saveStore('__global__', globalStore);
-          writeClaudeMdSection(null, globalStore); // null = global
+          writeRulesFiles('__global__', globalStore);
+          writeClaudeMdSection(null, globalStore);
         }
 
         // Handle supersedes
