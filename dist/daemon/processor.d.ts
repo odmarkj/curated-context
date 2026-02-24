@@ -7,7 +7,8 @@ interface ProcessingStats {
 }
 /**
  * Process all pending session files through the cascade pipeline.
+ * If projectRoot is provided, also scans project-local sessions (devcontainer support).
  */
-export declare function processQueue(): Promise<ProcessingStats>;
+export declare function processQueue(projectRoot?: string): Promise<ProcessingStats>;
 export {};
 //# sourceMappingURL=processor.d.ts.map

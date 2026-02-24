@@ -27,14 +27,15 @@ if (process.env.CC_DAEMON === '1') {
     };
 }
 app.use(express.json());
-app.post('/process', async (_req, res) => {
+app.post('/process', async (req, res) => {
     if (isProcessing) {
         res.json({ status: 'already_processing' });
         return;
     }
     isProcessing = true;
     try {
-        const stats = await processQueue();
+        const projectRoot = req.body?.projectRoot;
+        const stats = await processQueue(projectRoot);
         lastProcessed = Date.now();
         totalProcessed += stats.sessionsProcessed;
         totalApiCalls += stats.apiCallsMade;

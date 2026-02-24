@@ -7,7 +7,7 @@ import { extractWithClaude, type Memory, type ExtractionResult } from '../extrac
 import { loadStore, saveStore, type StoredMemory } from '../storage/memory-store.js';
 import { writeRulesFiles } from '../storage/rules-writer.js';
 import { writeClaudeMdSection } from '../storage/claude-md.js';
-import { getPendingSessions, markSessionProcessed } from './queue.js';
+import { getPendingSessions, markSessionProcessed, getProjectSessions, markProjectSessionProcessed } from './queue.js';
 
 interface ProcessingStats {
   sessionsProcessed: number;
@@ -19,8 +19,9 @@ interface ProcessingStats {
 
 /**
  * Process all pending session files through the cascade pipeline.
+ * If projectRoot is provided, also scans project-local sessions (devcontainer support).
  */
-export async function processQueue(): Promise<ProcessingStats> {
+export async function processQueue(projectRoot?: string): Promise<ProcessingStats> {
   const stats: ProcessingStats = {
     sessionsProcessed: 0,
     memoriesFromDecisionLog: 0,
@@ -29,13 +30,50 @@ export async function processQueue(): Promise<ProcessingStats> {
     apiCallsMade: 0,
   };
 
-  const sessions = getPendingSessions();
-  if (sessions.length === 0) return stats;
+  // Get sessions from central dir
+  const centralSessions = getPendingSessions();
 
-  for (const session of sessions) {
+  // Also get sessions from project-local dir if projectRoot provided
+  const projectSessions = projectRoot ? getProjectSessions(projectRoot) : [];
+
+  // Merge and deduplicate by sessionId (central takes precedence)
+  const seenIds = new Set<string>();
+  const allSessions: Array<{ sessionId: string; transcriptPath: string; projectRoot: string; isProjectLocal: boolean }> = [];
+
+  for (const session of centralSessions) {
+    seenIds.add(session.sessionId);
+    allSessions.push({
+      sessionId: session.sessionId,
+      transcriptPath: session.latestTranscriptPath,
+      projectRoot: session.projectRoot,
+      isProjectLocal: false,
+    });
+  }
+
+  for (const session of projectSessions) {
+    if (!seenIds.has(session.sessionId)) {
+      seenIds.add(session.sessionId);
+      allSessions.push({
+        sessionId: session.sessionId,
+        transcriptPath: session.latestTranscriptPath,
+        projectRoot: session.projectRoot,
+        isProjectLocal: true,
+      });
+    }
+  }
+
+  if (allSessions.length === 0) return stats;
+
+  for (const session of allSessions) {
     try {
-      await processSession(session.latestTranscriptPath, session.projectRoot, stats);
+      await processSession(session.transcriptPath, session.projectRoot, stats);
+
+      // Clean up from both locations
       markSessionProcessed(session.sessionId);
+      if (session.projectRoot) {
+        markProjectSessionProcessed(session.projectRoot, session.sessionId);
+      }
+
       stats.sessionsProcessed++;
     } catch (error) {
       console.error(`[cc] Failed to process session ${session.sessionId}:`, error);

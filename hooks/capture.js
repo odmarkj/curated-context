@@ -159,6 +159,7 @@ const event = {
   transcriptPath: transcript_path,
 };
 
+// === Central dir write (backward compat for host daemon poll) ===
 const sessionFile = join(SESSIONS_DIR, `${session_id}.jsonl`);
 try {
   appendFileSync(sessionFile, JSON.stringify(event) + '\n');
@@ -167,6 +168,43 @@ try {
   try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] SUCCESS: wrote session file ${sessionFile}\n`); } catch {}
 } catch (err) {
   try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] FAILED to write session: ${err}\n`); } catch {}
+}
+
+// === Project-local write (devcontainer support — shared volume) ===
+if (projectRoot) {
+  try {
+    const projectCcDir = join(projectRoot, '.curated-context');
+    const projectSessionsDir = join(projectCcDir, 'sessions');
+    const projectTranscriptsDir = join(projectCcDir, 'transcripts');
+    mkdirSync(projectSessionsDir, { recursive: true });
+    mkdirSync(projectTranscriptsDir, { recursive: true });
+
+    // Write session event to project dir
+    const projectSessionFile = join(projectSessionsDir, `${session_id}.jsonl`);
+    const projectHashFile = join(projectSessionsDir, `${session_id}.hash`);
+    appendFileSync(projectSessionFile, JSON.stringify(event) + '\n');
+    writeFileSync(projectHashFile, transcriptHash);
+
+    // Copy raw transcript to project dir (host daemon can't read container transcript paths)
+    const projectTranscriptFile = join(projectTranscriptsDir, `${session_id}.jsonl`);
+    writeFileSync(projectTranscriptFile, transcriptRaw);
+
+    try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] SUCCESS: wrote project-local session + transcript\n`); } catch {}
+
+    // Auto-append .curated-context/ to .gitignore
+    const gitignorePath = join(projectRoot, '.gitignore');
+    try {
+      let gitignore = '';
+      if (existsSync(gitignorePath)) {
+        gitignore = readFileSync(gitignorePath, 'utf8');
+      }
+      if (!gitignore.includes('.curated-context')) {
+        appendFileSync(gitignorePath, '\n# Curated Context plugin (session data)\n.curated-context/\n');
+      }
+    } catch { /* best effort — .gitignore might not exist or be writable */ }
+  } catch (err) {
+    try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] project-local write failed (non-fatal): ${err}\n`); } catch {}
+  }
 }
 
 // Output empty JSON — don't block, don't inject messages
