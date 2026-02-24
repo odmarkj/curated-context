@@ -288,12 +288,6 @@ curated-context/
 - **Feature requests** — [GitHub Issues](https://github.com/odmarkj/curated-context/issues)
 - **Questions** — [GitHub Discussions](https://github.com/odmarkj/curated-context/discussions)
 
-<p align="center">
-  <a href="TODO-buymeacoffee-url">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" width="200">
-  </a>
-</p>
-
 ---
 
 ## Sponsors
