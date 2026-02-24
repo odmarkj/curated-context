@@ -18,14 +18,6 @@
   <a href="TODO-buymeacoffee-url"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-donate-yellow.svg?logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee"></a>
 </p>
 
-<!-- TODO: Add animated GIF or SVG showing the tool in action -->
-<p align="center">
-  <img src="TODO-demo.gif" alt="curated-context demo" width="680">
-</p>
-<p align="center">
-  <em>curated-context silently observing a Claude Code session, then auto-generating project context files</em>
-</p>
-
 <p align="center">
   <a href="#the-problem">The Problem</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
@@ -240,9 +232,13 @@ For the full technical design document, see [DESIGN.md](DESIGN.md).
 
 ## Contributing
 
-<!-- TODO: Create CONTRIBUTING.md -->
+Contributions are welcome! Please:
 
-Contributions are welcome! Please see [CONTRIBUTING.md](TODO) for guidelines.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Update documentation + SECURITY.md
+5. Submit a Pull Request
 
 ### Development
 
@@ -295,6 +291,18 @@ curated-context/
 <p align="center">
   <a href="TODO-buymeacoffee-url">
     <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" width="200">
+  </a>
+</p>
+
+---
+
+## Sponsors
+
+A special thanks to our project sponsors:
+
+<p align="center">
+  <a href="https://localdataexchange.com">
+    <img src="https://www.localdataexchange.com/wp-content/uploads/2023/04/1145x433-LDE-black.png" alt="Local Data Exchange" width="300">
   </a>
 </p>
 

@@ -1,3 +1,11 @@
+// Data file extensions to track
+const DATA_FILE_EXTENSIONS = new Set([
+    '.jsonl', '.ndjson', '.csv', '.tsv', '.parquet', '.pickle', '.pkl',
+    '.sqlite', '.db', '.sqlite3', '.arrow', '.feather', '.h5', '.hdf5',
+    '.xlsx', '.xls',
+]);
+// Regex to extract data file paths from Bash commands
+const BASH_DATA_FILE_RE = /(?:^|\s|['"])([^\s'"]*\.(?:jsonl|ndjson|csv|tsv|parquet|pickle|pkl|sqlite|db|sqlite3|arrow|feather|h5|hdf5|xlsx|xls))\b/gi;
 const CONFIG_FILES = new Set([
     'tsconfig.json',
     'tsconfig.base.json',
@@ -140,7 +148,16 @@ export function extractStructural(toolEvents) {
         // Tech preferences (global scope)
         const prefMemories = extractTechPreferences(filePath, content);
         memories.push(...prefMemories);
+        // Schema definitions from ORM files
+        const schemaMemories = extractSchemaDefinitions(filePath, content);
+        memories.push(...schemaMemories);
+        // Database connections (no credentials stored)
+        const dbMemories = extractDatabaseConnections(filePath, content);
+        memories.push(...dbMemories);
     }
+    // Data file detection from ALL event types (Read, Write, Edit, Bash)
+    const dataFileMemories = extractDataFiles(toolEvents);
+    memories.push(...dataFileMemories);
     // Deduplicate by key
     const seen = new Map();
     for (const mem of memories) {
@@ -442,6 +459,319 @@ function extractTechPreferences(filePath, content) {
         });
     }
     return memories;
+}
+function extractDataFiles(toolEvents) {
+    const memories = [];
+    const refCounts = new Map();
+    for (const event of toolEvents) {
+        const paths = [];
+        if (event.tool === 'Write' || event.tool === 'Edit') {
+            const fp = event.input.file_path ?? '';
+            const content = event.input.content ?? event.input.new_string ?? '';
+            if (fp && hasDataExtension(fp)) {
+                paths.push({ path: fp, confidence: 0.95, content });
+            }
+        }
+        else if (event.tool === 'Read') {
+            const fp = event.input.file_path ?? '';
+            if (fp && hasDataExtension(fp)) {
+                paths.push({ path: fp, confidence: 0.85 });
+            }
+        }
+        else if (event.tool === 'Bash') {
+            const cmd = event.input.command ?? '';
+            if (cmd) {
+                let match;
+                const re = new RegExp(BASH_DATA_FILE_RE.source, 'gi');
+                while ((match = re.exec(cmd)) !== null) {
+                    paths.push({ path: match[1], confidence: 0.75 });
+                }
+            }
+        }
+        for (const { path, confidence, content } of paths) {
+            const ext = getExtension(path);
+            const name = basename(path);
+            const key = `data-file-${name}`;
+            // Track references for canonical detection
+            refCounts.set(path, (refCounts.get(path) ?? 0) + 1);
+            let value = `${path} (${ext.replace('.', '').toUpperCase()})`;
+            // Schema sniffing for Write events with content
+            if (content && content.length > 0) {
+                const fields = sniffFields(content, ext);
+                if (fields) {
+                    value += ` — fields: ${fields}`;
+                }
+            }
+            memories.push({
+                category: 'data',
+                key,
+                value,
+                confidence,
+                source: path,
+            });
+        }
+    }
+    // Emit canonical source memories for files referenced 3+ times
+    for (const [path, count] of refCounts) {
+        if (count >= 3) {
+            memories.push({
+                category: 'data',
+                key: `canonical-${basename(path)}`,
+                value: `${path} — frequently-referenced data source (${count}x)`,
+                confidence: 1.0,
+                source: path,
+            });
+        }
+    }
+    return memories;
+}
+function extractSchemaDefinitions(filePath, content) {
+    const memories = [];
+    const file = basename(filePath);
+    // Prisma schema
+    if (file === 'schema.prisma' || filePath.endsWith('prisma/schema.prisma')) {
+        const models = [];
+        const re = /^model\s+(\w+)\s*\{/gm;
+        let match;
+        while ((match = re.exec(content)) !== null) {
+            models.push(match[1]);
+        }
+        if (models.length > 0) {
+            memories.push({
+                category: 'data',
+                key: `schema-prisma-${file}`,
+                value: `Prisma schema at ${filePath} — models: ${models.slice(0, 8).join(', ')}`,
+                confidence: 0.95,
+                source: filePath,
+            });
+        }
+    }
+    // Drizzle schema
+    if (/drizzle.*schema/i.test(filePath) || /schema.*drizzle/i.test(filePath)) {
+        const tables = [];
+        const re = /(?:pgTable|mysqlTable|sqliteTable)\s*\(\s*['"](\w+)['"]/g;
+        let match;
+        while ((match = re.exec(content)) !== null) {
+            tables.push(match[1]);
+        }
+        if (tables.length > 0) {
+            memories.push({
+                category: 'data',
+                key: `schema-drizzle-${file}`,
+                value: `Drizzle schema at ${filePath} — tables: ${tables.slice(0, 8).join(', ')}`,
+                confidence: 0.95,
+                source: filePath,
+            });
+        }
+    }
+    // Django / SQLAlchemy models
+    if (file === 'models.py' || /models\/.*\.py$/.test(filePath)) {
+        const models = [];
+        const re = /class\s+(\w+)\s*\(.*(?:Model|Base|db\.Model)\)/g;
+        let match;
+        while ((match = re.exec(content)) !== null) {
+            models.push(match[1]);
+        }
+        if (models.length > 0) {
+            memories.push({
+                category: 'data',
+                key: `schema-models-${file}`,
+                value: `Models at ${filePath} — classes: ${models.slice(0, 8).join(', ')}`,
+                confidence: 0.95,
+                source: filePath,
+            });
+        }
+    }
+    // TypeORM entities
+    if (/entities\/.*\.ts$/.test(filePath) || /entity\.ts$/.test(filePath)) {
+        const entities = [];
+        const re = /@Entity\(\)[\s\S]*?class\s+(\w+)/g;
+        let match;
+        while ((match = re.exec(content)) !== null) {
+            entities.push(match[1]);
+        }
+        if (entities.length > 0) {
+            memories.push({
+                category: 'data',
+                key: `schema-typeorm-${file}`,
+                value: `TypeORM entity at ${filePath} — entities: ${entities.slice(0, 8).join(', ')}`,
+                confidence: 0.95,
+                source: filePath,
+            });
+        }
+    }
+    // Sequelize models
+    if (/models\/.*\.(ts|js)$/.test(filePath) && /define\s*\(|sequelize\.define/i.test(content)) {
+        const models = [];
+        const re = /(?:sequelize\.define|\.define)\s*\(\s*['"](\w+)['"]/g;
+        let match;
+        while ((match = re.exec(content)) !== null) {
+            models.push(match[1]);
+        }
+        if (models.length > 0) {
+            memories.push({
+                category: 'data',
+                key: `schema-sequelize-${file}`,
+                value: `Sequelize models at ${filePath} — models: ${models.slice(0, 8).join(', ')}`,
+                confidence: 0.95,
+                source: filePath,
+            });
+        }
+    }
+    // Migration files — just note existence
+    if (/migrations?\//.test(filePath) && /\.(ts|js|py|rb|sql)$/.test(filePath)) {
+        memories.push({
+            category: 'data',
+            key: `migration-${file}`,
+            value: `Database migration: ${filePath}`,
+            confidence: 0.8,
+            source: filePath,
+        });
+    }
+    return memories;
+}
+function extractDatabaseConnections(filePath, content) {
+    const memories = [];
+    const file = basename(filePath);
+    // .env.example or .env.local — detect DB type without storing credentials
+    if (file === '.env.example' || file === '.env.local' || file === '.env.sample') {
+        const dbType = detectDbTypeFromEnv(content);
+        if (dbType) {
+            memories.push({
+                category: 'data',
+                key: 'db-connection',
+                value: `${dbType} database (config in ${filePath})`,
+                confidence: 0.9,
+                source: filePath,
+            });
+        }
+    }
+    // Prisma datasource block
+    if (file === 'schema.prisma' || filePath.endsWith('prisma/schema.prisma')) {
+        const providerMatch = /provider\s*=\s*"(\w+)"/i.exec(content);
+        if (providerMatch) {
+            const provider = providerMatch[1];
+            const dbLabel = provider === 'postgresql' ? 'PostgreSQL'
+                : provider === 'mysql' ? 'MySQL'
+                    : provider === 'sqlite' ? 'SQLite'
+                        : provider === 'mongodb' ? 'MongoDB'
+                            : provider;
+            memories.push({
+                category: 'data',
+                key: 'db-connection-prisma',
+                value: `${dbLabel} via Prisma (config in ${filePath})`,
+                confidence: 0.95,
+                source: filePath,
+            });
+        }
+    }
+    // Drizzle config — detect dialect
+    if (file === 'drizzle.config.ts' || file === 'drizzle.config.js') {
+        const dialectMatch = /dialect\s*:\s*['"](\w+)['"]/i.exec(content);
+        if (dialectMatch) {
+            memories.push({
+                category: 'data',
+                key: 'db-connection-drizzle',
+                value: `${capitalize(dialectMatch[1])} via Drizzle (config in ${filePath})`,
+                confidence: 0.9,
+                source: filePath,
+            });
+        }
+    }
+    // Python DB connections
+    if (filePath.endsWith('.py')) {
+        if (/create_engine\s*\(/i.test(content)) {
+            const dialectMatch = /create_engine\s*\(\s*['"](\w+)(?::|\+)/i.exec(content);
+            const dialect = dialectMatch ? capitalize(dialectMatch[1]) : 'SQL';
+            memories.push({
+                category: 'data',
+                key: 'db-connection-sqlalchemy',
+                value: `${dialect} via SQLAlchemy (in ${filePath})`,
+                confidence: 0.85,
+                source: filePath,
+            });
+        }
+        if (/DATABASES\s*=\s*\{/.test(content)) {
+            const engineMatch = /['"]ENGINE['"]\s*:\s*['"][^'"]*\.(\w+)['"]/i.exec(content);
+            const engine = engineMatch ? capitalize(engineMatch[1]) : 'SQL';
+            memories.push({
+                category: 'data',
+                key: 'db-connection-django',
+                value: `${engine} via Django (in ${filePath})`,
+                confidence: 0.85,
+                source: filePath,
+            });
+        }
+    }
+    return memories;
+}
+function hasDataExtension(filePath) {
+    const ext = getExtension(filePath);
+    return DATA_FILE_EXTENSIONS.has(ext);
+}
+function getExtension(filePath) {
+    const lastDot = filePath.lastIndexOf('.');
+    if (lastDot === -1)
+        return '';
+    return filePath.slice(lastDot).toLowerCase();
+}
+function sniffFields(content, ext) {
+    const firstLine = content.split('\n')[0]?.trim();
+    if (!firstLine)
+        return null;
+    if (ext === '.jsonl' || ext === '.ndjson') {
+        try {
+            const obj = JSON.parse(firstLine);
+            if (typeof obj === 'object' && obj !== null && !Array.isArray(obj)) {
+                const keys = Object.keys(obj).slice(0, 10);
+                if (keys.length > 0)
+                    return keys.join(', ');
+            }
+        }
+        catch {
+            // Not valid JSON
+        }
+    }
+    if (ext === '.csv' || ext === '.tsv') {
+        const sep = ext === '.tsv' ? '\t' : ',';
+        const headers = firstLine.split(sep).map((h) => h.trim().replace(/^["']|["']$/g, ''));
+        // Only return if headers look like field names (not numeric data)
+        if (headers.length > 0 && headers.every((h) => /^[a-zA-Z_]/.test(h))) {
+            return headers.slice(0, 10).join(', ');
+        }
+    }
+    return null;
+}
+function detectDbTypeFromEnv(content) {
+    // Check DATABASE_URL for protocol
+    const urlMatch = /DATABASE_URL\s*=\s*['"]?(\w+):\/\//m.exec(content);
+    if (urlMatch) {
+        const proto = urlMatch[1].toLowerCase();
+        if (proto === 'postgres' || proto === 'postgresql')
+            return 'PostgreSQL';
+        if (proto === 'mysql')
+            return 'MySQL';
+        if (proto === 'sqlite')
+            return 'SQLite';
+        if (proto === 'mongodb' || proto === 'mongodb+srv')
+            return 'MongoDB';
+        if (proto === 'redis')
+            return 'Redis';
+        return capitalize(proto);
+    }
+    // Check for DB-specific env vars
+    if (/POSTGRES_|PG_HOST|PGHOST/i.test(content))
+        return 'PostgreSQL';
+    if (/MYSQL_HOST|MYSQL_DATABASE/i.test(content))
+        return 'MySQL';
+    if (/MONGO_URI|MONGODB_/i.test(content))
+        return 'MongoDB';
+    if (/REDIS_URL|REDIS_HOST/i.test(content))
+        return 'Redis';
+    return null;
+}
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
 }
 function basename(filePath) {
     return filePath.split('/').pop() ?? filePath;

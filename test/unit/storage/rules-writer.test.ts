@@ -124,4 +124,70 @@ describe('writeRulesFiles', () => {
     const store = makeStore('__global__', {});
     expect(() => writeRulesFiles('__global__', store)).not.toThrow();
   });
+
+  it('creates cc-data.md with alwaysApply frontmatter and subsections', () => {
+    const store = makeStore(env.projectRoot, {
+      df1: {
+        key: 'data-file-bars.jsonl',
+        category: 'data',
+        value: 'data/bars.jsonl (JSONL) — fields: name, origin',
+        confidence: 0.95,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        sessionId: 's1',
+      },
+      schema1: {
+        key: 'schema-prisma-schema.prisma',
+        category: 'data',
+        value: 'Prisma schema — models: User, Post',
+        confidence: 0.95,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        sessionId: 's1',
+      },
+      db1: {
+        key: 'db-connection',
+        category: 'data',
+        value: 'PostgreSQL database (config in .env.example)',
+        confidence: 0.9,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        sessionId: 's1',
+      },
+    });
+
+    writeRulesFiles(env.projectRoot, store);
+
+    const content = readFileSync(join(env.projectRoot, '.claude', 'rules', 'cc-data.md'), 'utf8');
+    expect(content).toContain('alwaysApply: true');
+    expect(content).toContain('### Data Files');
+    expect(content).toContain('### Database Schemas');
+    expect(content).toContain('### Database Connections');
+    expect(content).toContain('canonical data sources');
+    expect(content).toContain('data-file-bars.jsonl');
+    expect(content).toContain('schema-prisma-schema.prisma');
+    expect(content).toContain('db-connection');
+  });
+
+  it('cc-data.md uses 2KB size limit', () => {
+    const memories: Record<string, any> = {};
+    for (let i = 0; i < 50; i++) {
+      memories[`key-${i}`] = {
+        key: `data-file-dataset-${i}.csv`,
+        category: 'data',
+        value: `data/datasets/dataset-${i}.csv (CSV) — fields: id, name, value, category, timestamp, status`,
+        confidence: 0.9,
+        createdAt: Date.now(),
+        updatedAt: Date.now() + i,
+        sessionId: 's1',
+      };
+    }
+    const store = makeStore(env.projectRoot, memories);
+
+    writeRulesFiles(env.projectRoot, store);
+
+    const content = readFileSync(join(env.projectRoot, '.claude', 'rules', 'cc-data.md'), 'utf8');
+    expect(Buffer.byteLength(content, 'utf8')).toBeLessThanOrEqual(2048);
+    expect(Buffer.byteLength(content, 'utf8')).toBeGreaterThan(1024);
+  });
 });

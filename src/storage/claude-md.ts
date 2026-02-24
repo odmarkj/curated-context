@@ -22,6 +22,9 @@ Examples:
 \`[global:preferences] pref-deploy-cloudflare: Deploys via wrangler CLI\`
 \`[global:preferences] pref-tool-vitest: Prefers over Jest\`
 \`[global:preferences] pref-style-tailwind: Prefers for CSS\`
+For data sources, schemas, and database connections, use category \`data\`:
+\`[data] data-file-bars: data/chocolate_bars.jsonl — canonical JSONL, fields: name, origin, rating\`
+\`[data] schema-prisma: Prisma schema — models: ChocolateBar, Company, Origin\`
 Only log deliberate decisions, not exploratory steps.`;
 
 /**

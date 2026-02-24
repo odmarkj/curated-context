@@ -13,6 +13,10 @@ const DECISION_SIGNALS: RegExp[] = [
   /(?:I (?:usually|typically|normally|generally|always) use)\s+/i,
   /(?:I prefer|my go-to|I like to use|I tend to use|my preference is)\s+/i,
   /(?:for (?:backend|frontend|styling|testing|deployment|CI),?\s+(?:I|we)\s+(?:use|prefer|like))/i,
+  /(?:data\s*(?:file|source|set|base)|single source of truth|canonical\s+(?:data|file|source))/i,
+  /(?:schema|table|model|migration|column|field)\s+(?:is|has|should|must|contains)/i,
+  /(?:scrape[ds]?|ingest|import|export|etl|pipeline)\s+(?:data|from|to|into)/i,
+  /(?:\.jsonl|\.csv|\.parquet|\.pickle|\.sqlite)\b/i,
 ];
 
 const NOISE_SIGNALS: RegExp[] = [

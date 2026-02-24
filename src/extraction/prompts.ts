@@ -12,13 +12,13 @@ Given a conversation transcript, extract:
 Output JSON only, no other text:
 {
   "project_memories": [
-    { "category": "design|architecture|api|conventions|config|tooling|gotchas|preferences",
+    { "category": "design|architecture|api|conventions|config|tooling|gotchas|preferences|data",
       "key": "short identifier",
       "value": "concise description",
       "confidence": 0.0-1.0 }
   ],
   "global_memories": [
-    { "category": "design|architecture|api|conventions|config|tooling|gotchas|preferences",
+    { "category": "design|architecture|api|conventions|config|tooling|gotchas|preferences|data",
       "key": "short identifier",
       "value": "concise description",
       "confidence": 0.0-1.0 }
@@ -33,7 +33,7 @@ Rules:
 - Keep values concise (under 100 chars each).
 - Categories: architecture (tech stack, patterns), design (colors, fonts, layout), api (routes, auth),
   conventions (naming, style), config (env, build), tooling (dev tools, CI), gotchas (pitfalls, warnings),
-  preferences (cross-project technology preferences).
+  preferences (cross-project technology preferences), data (canonical data files, database schemas, data pipelines, ORM configs).
 - For global_memories, use the "preferences" category for technology preferences:
   - Language: key "pref-lang-{name}", e.g. "pref-lang-python": "Prefers for backend and ML"
   - Framework: key "pref-framework-{name}", e.g. "pref-framework-nextjs": "Prefers for React frontends"
@@ -41,7 +41,11 @@ Rules:
   - Tooling: key "pref-tool-{name}", e.g. "pref-tool-vitest": "Prefers over Jest for testing"
   - Style: key "pref-style-{name}", e.g. "pref-style-tailwind": "Prefers for CSS in most projects"
 - Preferences are suggestions, not rules. Phrase values as "Prefers..." or "Uses..." not "Always uses..."
-- Infer preferences from repeated usage patterns or explicit statements like "I prefer", "my go-to", "I usually use".`;
+- Infer preferences from repeated usage patterns or explicit statements like "I prefer", "my go-to", "I usually use".
+- For the "data" category, extract canonical data files (JSONL, CSV, Parquet, etc.), their schemas,
+  database schemas from ORMs, and data pipeline relationships. If a file is designated as the
+  "single source of truth" or "canonical source", extract with high confidence.
+  Key format: "data-<type>-<name>", e.g. "data-file-bars.jsonl": "data/bars.jsonl — JSONL with fields name, origin, rating".`;
 
 export function buildExtractionPrompt(
   messages: Array<{ role: string; content: string }>,
