@@ -22,18 +22,32 @@ export function writeRulesFiles(projectRoot, store) {
         const filename = `${RULES_PREFIX}${category}.md`;
         const filePath = join(rulesDir, filename);
         // Build content
-        let content = `---\ndescription: ${capitalize(category)} context (auto-managed by curated-context)\n---\n\n`;
+        const isPreferences = category === 'preferences';
+        const description = isPreferences
+            ? 'Technology preferences inferred from usage patterns (auto-managed by curated-context). These are suggestions — offer as options, do not auto-apply.'
+            : `${capitalize(category)} context (auto-managed by curated-context)`;
+        let content = `---\ndescription: ${description}\n---\n\n`;
+        if (isPreferences) {
+            content += `_These are the developer's observed preferences. Suggest or offer as options when relevant, but do not automatically apply them._\n\n`;
+        }
         for (const mem of memories) {
-            const line = `- **${mem.key}**: ${mem.value}\n`;
+            const line = isPreferences
+                ? `- **${mem.key}**: ${mem.value} _(preference)_\n`
+                : `- **${mem.key}**: ${mem.value}\n`;
             content += line;
         }
         // Enforce size limit — trim oldest entries if too large
         if (Buffer.byteLength(content, 'utf8') > MAX_RULES_FILE_SIZE) {
             // Sort by updatedAt desc, keep adding until we hit the limit
             const sorted = [...memories].sort((a, b) => b.updatedAt - a.updatedAt);
-            content = `---\ndescription: ${capitalize(category)} context (auto-managed by curated-context)\n---\n\n`;
+            content = `---\ndescription: ${description}\n---\n\n`;
+            if (isPreferences) {
+                content += `_These are the developer's observed preferences. Suggest or offer as options when relevant, but do not automatically apply them._\n\n`;
+            }
             for (const mem of sorted) {
-                const line = `- **${mem.key}**: ${mem.value}\n`;
+                const line = isPreferences
+                    ? `- **${mem.key}**: ${mem.value} _(preference)_\n`
+                    : `- **${mem.key}**: ${mem.value}\n`;
                 if (Buffer.byteLength(content + line, 'utf8') > MAX_RULES_FILE_SIZE)
                     break;
                 content += line;

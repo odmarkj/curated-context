@@ -5,6 +5,7 @@ export interface StructuralMemory {
     value: string;
     confidence: number;
     source: string;
+    scope?: 'project' | 'global';
 }
 /**
  * Extract structured memories from tool_use events (file writes/edits).

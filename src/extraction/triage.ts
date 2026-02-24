@@ -9,6 +9,10 @@ const DECISION_SIGNALS: RegExp[] = [
   /(?:always|never|prefer|avoid)\s+/i,
   /(?:architecture|design system|component library|state management)/i,
   /(?:database|orm|authentication|authorization)\s+(?:is|uses?|with)/i,
+  /(?:deploy(?:ing|ed|s)?|hosting|wrangler|vercel|netlify|cloudflare|aws|gcloud)\s+/i,
+  /(?:I (?:usually|typically|normally|generally|always) use)\s+/i,
+  /(?:I prefer|my go-to|I like to use|I tend to use|my preference is)\s+/i,
+  /(?:for (?:backend|frontend|styling|testing|deployment|CI),?\s+(?:I|we)\s+(?:use|prefer|like))/i,
 ];
 
 const NOISE_SIGNALS: RegExp[] = [

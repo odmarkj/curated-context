@@ -11,6 +11,14 @@ API patterns, tech stack), append a one-line summary to \`.claude/decisions.log\
 \`[category] key: value\`
 For cross-project preferences (coding style, tool prefs, workflow patterns), use:
 \`[global:category] key: value\`
+For technology preferences that should be remembered across projects, use:
+\`[global:preferences] pref-type-name: description\`
+Examples:
+\`[global:preferences] pref-lang-python: Prefers for backend and ML\`
+\`[global:preferences] pref-framework-nextjs: Prefers for React frontends\`
+\`[global:preferences] pref-deploy-cloudflare: Deploys via wrangler CLI\`
+\`[global:preferences] pref-tool-vitest: Prefers over Jest\`
+\`[global:preferences] pref-style-tailwind: Prefers for CSS\`
 Only log deliberate decisions, not exploratory steps.`;
 /**
  * Write the marker-based section to CLAUDE.md.

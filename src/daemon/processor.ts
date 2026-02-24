@@ -107,13 +107,40 @@ async function processSession(
   // === Tier 2: Structural Extraction (free) ===
   const structuralMemories = extractStructural(transcript.toolEvents);
 
-  // Only add structural memories that aren't already covered by decision log
+  // Partition structural memories by scope
+  const projectStructural = structuralMemories.filter((m) => m.scope !== 'global');
+  const globalStructural = structuralMemories.filter((m) => m.scope === 'global');
+
+  // Only add project structural memories that aren't already covered by decision log
   const decisionKeys = new Set(allNewMemories.map((m) => m.key));
-  for (const mem of structuralMemories) {
+  for (const mem of projectStructural) {
     if (!decisionKeys.has(mem.key)) {
       allNewMemories.push(mem);
       stats.memoriesFromStructural++;
     }
+  }
+
+  // Route global structural preferences to global store with confidence reinforcement
+  if (globalStructural.length > 0) {
+    const globalStore = loadStore('__global__');
+    const reinforcedMemories: Memory[] = globalStructural.map((mem) => {
+      const existing = globalStore.memories[mem.key];
+      // Reinforce confidence when seen again across projects (cap at 0.9)
+      const confidence = existing
+        ? Math.min(0.9, existing.confidence + 0.1)
+        : mem.confidence;
+      return {
+        category: mem.category,
+        key: mem.key,
+        value: mem.value,
+        confidence,
+      };
+    });
+    applyMemories(globalStore, reinforcedMemories, transcript.sessionId);
+    saveStore('__global__', globalStore);
+    writeRulesFiles('__global__', globalStore);
+    writeClaudeMdSection(null, globalStore);
+    stats.memoriesFromStructural += globalStructural.length;
   }
 
   // === Tier 3: Deterministic Triage (advisory) ===
