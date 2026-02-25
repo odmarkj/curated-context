@@ -207,5 +207,96 @@ if (projectRoot) {
   }
 }
 
+// === Bootstrap project-level hooks (enables devcontainer support) ===
+// When running as a plugin hook on the host, copies hook scripts into the
+// project workspace and configures .claude/settings.local.json so that
+// hooks also fire inside devcontainers (where the plugin cache isn't mounted).
+bootstrapProjectHooks(projectRoot);
+
 // Output empty JSON — don't block, don't inject messages
 process.stdout.write('{}');
+
+function bootstrapProjectHooks(root) {
+  if (!root) return;
+
+  // Don't re-bootstrap if we're already the project-local copy
+  try {
+    const selfPath = new URL(import.meta.url).pathname;
+    if (selfPath.includes('.curated-context/hooks/')) return;
+  } catch { return; }
+
+  const hooksDir = join(root, '.curated-context', 'hooks');
+  const captureTarget = join(hooksDir, 'capture.js');
+  const processTarget = join(hooksDir, 'process.js');
+
+  // Skip if already bootstrapped (both hook files exist)
+  if (existsSync(captureTarget) && existsSync(processTarget)) {
+    ensureHookSettings(root);
+    return;
+  }
+
+  try {
+    mkdirSync(hooksDir, { recursive: true });
+
+    // Copy this script (capture.js) to project hooks dir
+    const selfPath = new URL(import.meta.url).pathname;
+    const selfSource = readFileSync(selfPath, 'utf8');
+    writeFileSync(captureTarget, selfSource);
+
+    // Copy simplified process hook (no daemon auto-start)
+    const processLocalPath = join(selfPath, '..', 'process-local.js');
+    if (existsSync(processLocalPath)) {
+      const processSource = readFileSync(processLocalPath, 'utf8');
+      writeFileSync(processTarget, processSource);
+    }
+
+    ensureHookSettings(root);
+
+    try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] bootstrapped project hooks at ${hooksDir}\n`); } catch {}
+  } catch (err) {
+    try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] bootstrap failed (non-fatal): ${err}\n`); } catch {}
+  }
+}
+
+function ensureHookSettings(root) {
+  try {
+    const claudeDir = join(root, '.claude');
+    mkdirSync(claudeDir, { recursive: true });
+    const settingsPath = join(claudeDir, 'settings.local.json');
+
+    let settings = {};
+    if (existsSync(settingsPath)) {
+      try { settings = JSON.parse(readFileSync(settingsPath, 'utf8')); } catch {}
+    }
+
+    // Check if our hooks are already configured
+    const json = JSON.stringify(settings);
+    if (json.includes('.curated-context/hooks/capture.js')) return;
+
+    if (!settings.hooks) settings.hooks = {};
+    if (!settings.hooks.Stop) settings.hooks.Stop = [];
+    if (!settings.hooks.SessionStart) settings.hooks.SessionStart = [];
+
+    settings.hooks.Stop.push({
+      hooks: [{
+        type: 'command',
+        command: 'node "$CLAUDE_PROJECT_DIR/.curated-context/hooks/capture.js"',
+        timeout: 5000,
+      }],
+    });
+
+    settings.hooks.SessionStart.push({
+      hooks: [{
+        type: 'command',
+        command: 'node "$CLAUDE_PROJECT_DIR/.curated-context/hooks/process.js"',
+        timeout: 5000,
+      }],
+    });
+
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+
+    try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] wrote hook settings to ${settingsPath}\n`); } catch {}
+  } catch (err) {
+    try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] ensureHookSettings failed (non-fatal): ${err}\n`); } catch {}
+  }
+}
