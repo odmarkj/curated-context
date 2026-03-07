@@ -43,7 +43,19 @@ There are many times when curated context can save significant time, frustration
 
 You end up re-explaining the same decisions in every session. Over and over.
 
-**curated-context fixes this.** It runs silently in the background, captures the decisions you make during conversations, and writes them into files that Claude Code automatically reads. The next session starts with full context — your design tokens, your architecture choices, your conventions — without you lifting a finger.
+### Where curated-context fits
+
+Claude Code has a growing memory ecosystem. Each layer serves a different purpose:
+
+| Layer | How it works | What it's good at |
+|-------|-------------|-------------------|
+| **Built-in memory** | You tell Claude "remember this" and it writes to `CLAUDE.md` | Explicit, intentional notes you want Claude to keep |
+| **[claude-mem](https://github.com/thedotmack/claude-mem)** | Cross-session search over past conversations | Recalling *what you discussed* — finding prior work, decisions, and context from old sessions |
+| **curated-context** (this plugin) | Passively extracts high-value information from every session | Automatically remembering *project knowledge* — design tokens, architecture choices, API patterns, conventions, and gotchas |
+
+Built-in memory requires you to stop and say "remember this." claude-mem lets you search your history. **curated-context fills the gap between them** — it watches your conversations and silently captures the decisions that matter, so the next session starts with full context without you lifting a finger.
+
+All three can run together. They complement each other.
 
 ---
 
@@ -57,7 +69,7 @@ claude plugin marketplace add odmarkj/curated-context
 claude plugin install curated-context
 ```
 
-That's it. Two commands. No configuration needed.
+That's it. Two commands. No configuration needed. Works on the host and in devcontainers — the plugin auto-bootstraps into containers on first use.
 
 ---
 
