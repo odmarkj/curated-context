@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 // process-local.js — SessionStart hook (project-level, devcontainer support)
-// Checks for pending sessions and POSTs to the host daemon.
-// No daemon auto-start — relies on host daemon already running or starting
-// via the plugin-level process.js hook on the next host session.
+// 1. Auto-installs the plugin into the container's ~/.claude/ if not present
+// 2. Checks for pending sessions and POSTs to the host daemon
+// No daemon auto-start — relies on host daemon already running.
 
-import { readdirSync, readFileSync, mkdirSync, existsSync } from 'fs';
+import { readdirSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, cpSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -20,7 +20,13 @@ try {
   if (stdinData.trim()) hookInput = JSON.parse(stdinData);
 } catch {}
 
-const projectRoot = hookInput.cwd || process.cwd();
+const projectRoot = hookInput.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+
+// === Auto-install plugin (devcontainer support) ===
+// If the plugin isn't in this environment's ~/.claude/plugins/cache/, copy it
+// from the project workspace (.curated-context/plugin/) which was placed there
+// by the host-side bootstrap.
+autoInstallPlugin(projectRoot);
 
 // Check for pending sessions in central dir
 mkdirSync(SESSIONS_DIR, { recursive: true });
@@ -65,3 +71,45 @@ try {
 }
 
 process.stdout.write('{}');
+
+function autoInstallPlugin(root) {
+  if (!root) return;
+
+  const pluginCacheDir = join(homedir(), '.claude', 'plugins', 'cache',
+    'curated-context', 'curated-context', '0.1.0');
+
+  // Already installed in this environment
+  if (existsSync(pluginCacheDir)) return;
+
+  // Check if the project has a bootstrapped plugin package
+  const pluginSource = join(root, '.curated-context', 'plugin');
+  if (!existsSync(join(pluginSource, '.claude-plugin', 'plugin.json'))) return;
+
+  try {
+    // Copy minimal plugin package to this environment's plugin cache
+    mkdirSync(pluginCacheDir, { recursive: true });
+    cpSync(pluginSource, pluginCacheDir, { recursive: true });
+
+    // Enable the plugin in ~/.claude/settings.json
+    const claudeDir = join(homedir(), '.claude');
+    mkdirSync(claudeDir, { recursive: true });
+    const settingsPath = join(claudeDir, 'settings.json');
+
+    let settings = {};
+    if (existsSync(settingsPath)) {
+      try { settings = JSON.parse(readFileSync(settingsPath, 'utf8')); } catch {}
+    }
+
+    if (!settings.enabledPlugins) settings.enabledPlugins = {};
+    if (!settings.enabledPlugins['curated-context@curated-context']) {
+      settings.enabledPlugins['curated-context@curated-context'] = true;
+      writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+    }
+
+    try {
+      mkdirSync(CC_DIR, { recursive: true });
+      appendFileSync(join(CC_DIR, 'hook-debug.log'),
+        `[${new Date().toISOString()}] auto-installed plugin to ${pluginCacheDir}\n`);
+    } catch {}
+  } catch {}
+}

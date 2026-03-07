@@ -4,7 +4,7 @@
 // Accumulates transcript data to a session file. No API calls.
 // Must be plain JS (no build step) since hooks run directly via node.
 
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, cpSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -228,9 +228,11 @@ function bootstrapProjectHooks(root) {
   const hooksDir = join(root, '.curated-context', 'hooks');
   const captureTarget = join(hooksDir, 'capture.js');
   const processTarget = join(hooksDir, 'process.js');
+  const pluginTarget = join(root, '.curated-context', 'plugin');
+  const pluginMarker = join(pluginTarget, '.claude-plugin', 'plugin.json');
 
-  // Skip if already bootstrapped (both hook files exist)
-  if (existsSync(captureTarget) && existsSync(processTarget)) {
+  // Skip if already bootstrapped (hooks + plugin package exist)
+  if (existsSync(captureTarget) && existsSync(processTarget) && existsSync(pluginMarker)) {
     ensureHookSettings(root);
     return;
   }
@@ -250,11 +252,51 @@ function bootstrapProjectHooks(root) {
       writeFileSync(processTarget, processSource);
     }
 
+    // Copy minimal plugin package for devcontainer auto-install
+    // (Only the files needed for Claude Code to load the plugin: manifest, hooks, commands)
+    const pluginRoot = join(selfPath, '..', '..');
+    copyPluginPackage(pluginRoot, pluginTarget);
+
     ensureHookSettings(root);
 
-    try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] bootstrapped project hooks at ${hooksDir}\n`); } catch {}
+    try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] bootstrapped project hooks + plugin at ${root}/.curated-context/\n`); } catch {}
   } catch (err) {
     try { appendFileSync(join(CC_DIR, 'hook-debug.log'), `[${new Date().toISOString()}] bootstrap failed (non-fatal): ${err}\n`); } catch {}
+  }
+}
+
+function copyPluginPackage(pluginRoot, pluginTarget) {
+  mkdirSync(pluginTarget, { recursive: true });
+
+  // Copy plugin identity files
+  const claudePluginDir = join(pluginRoot, '.claude-plugin');
+  if (existsSync(claudePluginDir)) {
+    cpSync(claudePluginDir, join(pluginTarget, '.claude-plugin'), { recursive: true });
+  }
+
+  // Copy slash commands
+  const commandsDir = join(pluginRoot, 'commands');
+  if (existsSync(commandsDir)) {
+    cpSync(commandsDir, join(pluginTarget, 'commands'), { recursive: true });
+  }
+
+  // Copy hooks (hooks.json + scripts)
+  const hooksDir = join(pluginRoot, 'hooks');
+  if (existsSync(hooksDir)) {
+    cpSync(hooksDir, join(pluginTarget, 'hooks'), { recursive: true });
+  }
+
+  // Replace process.js with simplified version for container use (no daemon auto-start)
+  const processLocalPath = join(pluginRoot, 'hooks', 'process-local.js');
+  if (existsSync(processLocalPath)) {
+    const processLocal = readFileSync(processLocalPath, 'utf8');
+    writeFileSync(join(pluginTarget, 'hooks', 'process.js'), processLocal);
+  }
+
+  // Copy package.json for metadata
+  const packageJson = join(pluginRoot, 'package.json');
+  if (existsSync(packageJson)) {
+    cpSync(packageJson, join(pluginTarget, 'package.json'));
   }
 }
 
