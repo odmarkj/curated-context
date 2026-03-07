@@ -26,7 +26,7 @@ const projectRoot = hookInput.cwd || process.env.CLAUDE_PROJECT_DIR || process.c
 // If the plugin isn't in this environment's ~/.claude/plugins/cache/, copy it
 // from the project workspace (.curated-context/plugin/) which was placed there
 // by the host-side bootstrap.
-autoInstallPlugin(projectRoot);
+const didAutoInstall = autoInstallPlugin(projectRoot);
 
 // Check for pending sessions in central dir
 mkdirSync(SESSIONS_DIR, { recursive: true });
@@ -46,7 +46,16 @@ if (!hasPending && projectRoot) {
 }
 
 if (!hasPending) {
-  process.stdout.write('{}');
+  if (didAutoInstall) {
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: 'The curated-context plugin was just auto-installed into this environment. Slash commands like /curated-context:show will be available after restarting this session. Please tell the user: "The curated-context plugin was auto-installed. Please restart this session (type /restart or close and reopen) to enable slash commands."',
+      },
+    }));
+  } else {
+    process.stdout.write('{}');
+  }
   process.exit(0);
 }
 
@@ -70,20 +79,29 @@ try {
   } catch {}
 }
 
-process.stdout.write('{}');
+if (didAutoInstall) {
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'SessionStart',
+      additionalContext: 'The curated-context plugin was just auto-installed into this environment. Slash commands like /curated-context:show will be available after restarting this session. Please tell the user: "The curated-context plugin was auto-installed. Please restart this session (type /restart or close and reopen) to enable slash commands."',
+    },
+  }));
+} else {
+  process.stdout.write('{}');
+}
 
 function autoInstallPlugin(root) {
-  if (!root) return;
+  if (!root) return false;
 
   const pluginCacheDir = join(homedir(), '.claude', 'plugins', 'cache',
     'curated-context', 'curated-context', '0.1.0');
 
   // Already installed in this environment
-  if (existsSync(pluginCacheDir)) return;
+  if (existsSync(pluginCacheDir)) return false;
 
   // Check if the project has a bootstrapped plugin package
   const pluginSource = join(root, '.curated-context', 'plugin');
-  if (!existsSync(join(pluginSource, '.claude-plugin', 'plugin.json'))) return;
+  if (!existsSync(join(pluginSource, '.claude-plugin', 'plugin.json'))) return false;
 
   try {
     // Copy minimal plugin package to this environment's plugin cache
@@ -111,5 +129,9 @@ function autoInstallPlugin(root) {
       appendFileSync(join(CC_DIR, 'hook-debug.log'),
         `[${new Date().toISOString()}] auto-installed plugin to ${pluginCacheDir}\n`);
     } catch {}
+
+    return true;
   } catch {}
+
+  return false;
 }
