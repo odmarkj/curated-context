@@ -107,23 +107,26 @@ for (const line of lines) {
 
   if (!entry.message?.content) continue;
 
-  if (entry.type === 'user') {
-    const text = entry.message.content
+  const rawContent = entry.message.content;
+  const extractText = (content) => {
+    if (typeof content === 'string') return content.trim();
+    if (!Array.isArray(content)) return '';
+    return content
       .filter((c) => c.type === 'text')
       .map((c) => c.text || '')
       .join('\n')
       .trim();
+  };
+
+  if (entry.type === 'user') {
+    const text = extractText(rawContent);
     if (text) {
       messages.push({ role: 'user', content: text });
     }
   }
 
   if (entry.type === 'assistant') {
-    const text = entry.message.content
-      .filter((c) => c.type === 'text')
-      .map((c) => c.text || '')
-      .join('\n')
-      .trim();
+    const text = extractText(rawContent);
     if (text) {
       messages.push({ role: 'assistant', content: text });
     }
