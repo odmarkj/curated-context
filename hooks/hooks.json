@@ -1,6 +1,17 @@
 {
   "description": "Curated Context — Intelligent memory sidecar",
   "hooks": {
+    "Setup": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/setup.js",
+            "timeout": 60000
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

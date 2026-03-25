@@ -91,14 +91,40 @@ if (!daemonRunning) {
   // Lazy npm install: if node_modules/ doesn't exist, install runtime deps first
   const nodeModulesDir = join(pluginRoot, 'node_modules');
   if (!existsSync(nodeModulesDir)) {
+    let installed = false;
+    // Try installing directly in plugin root
     try {
       execSync('npm install --omit=dev', {
         cwd: pluginRoot,
         stdio: 'ignore',
         timeout: 60000,
       });
+      installed = true;
     } catch {
-      // Install failed — daemon can't start without deps, try again next session
+      // Direct install failed (e.g. read-only bind mount) —
+      // install in a temp dir and copy node_modules back
+      try {
+        const { mkdtempSync, cpSync } = await import('fs');
+        const { tmpdir } = await import('os');
+        const tmpDir = mkdtempSync(join(tmpdir(), 'cc-deps-'));
+        // Copy package.json + package-lock.json to temp dir
+        cpSync(join(pluginRoot, 'package.json'), join(tmpDir, 'package.json'));
+        const lockFile = join(pluginRoot, 'package-lock.json');
+        if (existsSync(lockFile)) {
+          cpSync(lockFile, join(tmpDir, 'package-lock.json'));
+        }
+        execSync('npm install --omit=dev', {
+          cwd: tmpDir,
+          stdio: 'ignore',
+          timeout: 60000,
+        });
+        cpSync(join(tmpDir, 'node_modules'), nodeModulesDir, { recursive: true });
+        installed = true;
+      } catch {
+        // Both methods failed
+      }
+    }
+    if (!installed) {
       process.stdout.write('{}');
       process.exit(0);
     }
