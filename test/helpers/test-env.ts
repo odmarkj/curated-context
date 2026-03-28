@@ -55,6 +55,14 @@ export function createTestEnv(port = 0): TestEnv {
       }
     },
     cleanup() {
+      // Close any SQLite connections before removing temp files
+      try {
+        const { closeAllDbs } = require('../../../src/storage/memory-store.js');
+        closeAllDbs();
+      } catch {
+        // Module may not be loaded yet
+      }
+
       for (const [key, val] of Object.entries(saved)) {
         if (val !== undefined) process.env[key] = val;
         else delete process.env[key];

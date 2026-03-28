@@ -1,4 +1,12 @@
 /**
+ * Create a transcript JSONL with a custom cwd (project root).
+ * Useful for container tests that need the hook to find a specific projectRoot.
+ */
+export function makeTranscriptWithCwd(cwd: string): string {
+  return TRANSCRIPT_DECISIONS.replace(/\/tmp\/test-project/g, cwd);
+}
+
+/**
  * Transcript JSONL where user makes design/architecture decisions
  * and assistant writes CSS, tailwind config, tsconfig via tool_use.
  */

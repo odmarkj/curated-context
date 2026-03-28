@@ -15,6 +15,23 @@ const DECISION_SIGNALS = [
     /(?:schema|table|model|migration|column|field)\s+(?:is|has|should|must|contains)/i,
     /(?:scrape[ds]?|ingest|import|export|etl|pipeline)\s+(?:data|from|to|into)/i,
     /(?:\.jsonl|\.csv|\.parquet|\.pickle|\.sqlite)\b/i,
+    // Infrastructure, hosting, and operations decisions
+    /(?:hetzner|digitalocean|linode|vultr|ovh|render|railway|fly\.io|heroku|coolify|kamal|dokku)\b/i,
+    /(?:vps|bare.?metal|dedicated server|cloud server|self.?host)/i,
+    /(?:volume|storage|disk|lvm|partition|mount|filesystem|block storage|nfs)\s+/i,
+    /(?:reverse proxy|load balancer|traefik|nginx|caddy|haproxy)\b/i,
+    /(?:terraform|ansible|cloudformation|pulumi)\b/i,
+    /(?:backup|snapshot|replication|disaster recovery|failover)/i,
+    // Technology rejections and tradeoff decisions
+    /(?:rejected|dropped|removed|excluded|abandoned|ruled out|won't use|not using|stopped using)\s+/i,
+    /(?:instead of|rather than|over|replaced|switched from|moved away from|migrated from)\s+/i,
+    /(?:too (?:expensive|complex|slow|limited|risky|much)|doesn't support|can't handle|not enough)\s+/i,
+    /(?:the (?:reason|problem|issue|limitation|downside) (?:is|was|with))\s+/i,
+    // Scalability, capacity planning, and selection rationale
+    /(?:scalab|elastic|expandab|grow(?:th|able)|capacity|[0-9]+\s*[GT]B)\b/i,
+    /(?:chose|selected|picked|went with)\s+.*\b(?:because|since|due to|for)\b/i,
+    /(?:hot\s*(?:tier|storage)|cold\s*(?:tier|storage)|archiv(?:e|al)|tiered\s*storage)/i,
+    /(?:minio|s3.?compatible|object storage|blob storage)\b/i,
 ];
 const NOISE_SIGNALS = [
     /(?:let me try|hmm|actually wait|no that's wrong|error:|failed)/i,
@@ -25,22 +42,41 @@ const NOISE_SIGNALS = [
 ];
 /**
  * Deterministic triage — score conversation messages by decision signal density.
- * Zero API calls. Filters out ~75% of turns.
+ * Zero API calls. Scans ALL messages and extracts those with decision signals.
  */
 export function triageMessages(messages) {
-    // Focus on recent messages (last 10 turns)
-    const recent = messages.slice(-10);
-    const text = recent.map((m) => m.content).join(' ');
+    const text = messages.map((m) => m.content).join(' ');
     const decisionScore = DECISION_SIGNALS.reduce((score, re) => score + (re.test(text) ? 1 : 0), 0);
     const noiseScore = NOISE_SIGNALS.reduce((score, re) => score + (re.test(text) ? 1 : 0), 0);
     const shouldProcess = decisionScore >= 2 && decisionScore > noiseScore;
-    // Extract the specific messages with high signal
+    // Extract ALL messages across the session that have decision signals
     const highSignalMessages = shouldProcess
-        ? recent.filter((m) => {
+        ? messages.filter((m) => {
             const msgDecision = DECISION_SIGNALS.reduce((s, re) => s + (re.test(m.content) ? 1 : 0), 0);
             return msgDecision >= 1;
         })
         : [];
     return { shouldProcess, decisionScore, noiseScore, highSignalMessages };
+}
+/**
+ * Classify a session's conversation mode based on signal density.
+ * Used to gate extraction intensity — casual/debugging sessions skip Tier 4 LLM.
+ */
+export function classifyConversationMode(messages) {
+    if (messages.length === 0)
+        return 'casual';
+    const text = messages.map((m) => m.content).join(' ');
+    const decisionScore = DECISION_SIGNALS.reduce((score, re) => score + (re.test(text) ? 1 : 0), 0);
+    const noiseScore = NOISE_SIGNALS.reduce((score, re) => score + (re.test(text) ? 1 : 0), 0);
+    // Very few signals of any kind — casual/greeting
+    if (decisionScore < 2 && noiseScore < 2)
+        return 'casual';
+    // Dominated by noise — debugging session
+    if (noiseScore > decisionScore && noiseScore >= 3)
+        return 'debugging';
+    // Strong decision signals
+    if (decisionScore >= 4 && decisionScore > noiseScore * 2)
+        return 'decision-heavy';
+    return 'mixed';
 }
 //# sourceMappingURL=triage.js.map

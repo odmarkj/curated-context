@@ -1,8 +1,8 @@
 import { writeFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import type { MemoryStore } from './memory-store.js';
-import { getMemoriesByCategory } from './memory-store.js';
+import type { MemoryStore, StoredMemory } from './memory-store.js';
+import { getMemoriesByCategory, computeEffectiveConfidence } from './memory-store.js';
 
 const RULES_PREFIX = 'cc-';
 const MAX_RULES_FILE_SIZE = 1024; // 1KB per file
@@ -24,17 +24,48 @@ export function writeRulesFiles(projectRoot: string, store: MemoryStore): void {
   const grouped = getMemoriesByCategory(store);
   const writtenCategories = new Set<string>();
 
+  const now = Date.now();
+  const RULES_MIN_CONFIDENCE = 0.1; // exclude heavily-decayed memories from rules files
+
+  // Session coherence bonus thresholds
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  const SEVEN_DAYS = 7 * ONE_DAY;
+
+  /**
+   * Compute ranking score: effective confidence + session recency bonus.
+   * Recent memories get a boost so they rank above stale high-confidence entries.
+   */
+  function rankingScore(mem: StoredMemory): number {
+    const base = computeEffectiveConfidence(mem, now);
+    const age = now - mem.updatedAt;
+
+    let bonus = 0;
+    if (age < ONE_DAY) bonus = 0.10;
+    else if (age < SEVEN_DAYS) bonus = 0.05;
+
+    return Math.min(base + bonus, 1.0);
+  }
+
   for (const [category, memories] of Object.entries(grouped)) {
     const filename = `${RULES_PREFIX}${category}.md`;
     const filePath = join(rulesDir, filename);
     const maxSize = category === 'data' ? MAX_DATA_RULES_SIZE : MAX_RULES_FILE_SIZE;
 
-    let content = buildCategoryContent(category, memories);
+    // Filter out heavily-decayed memories and sort by ranking score (desc)
+    const ranked = memories
+      .filter((m) => computeEffectiveConfidence(m, now) >= RULES_MIN_CONFIDENCE)
+      .sort((a, b) => rankingScore(b) - rankingScore(a));
 
-    // Enforce size limit — trim oldest entries if too large
+    // Touch accessed memories (reactivation)
+    for (const mem of ranked) {
+      mem.lastAccessed = now;
+    }
+
+    let content = buildCategoryContent(category, ranked);
+
+    // Enforce size limit — trim lowest-ranked entries if too large
     if (Buffer.byteLength(content, 'utf8') > maxSize) {
-      const sorted = [...memories].sort((a, b) => b.updatedAt - a.updatedAt);
-      content = buildCategoryContent(category, sorted, maxSize);
+      content = buildCategoryContent(category, ranked, maxSize);
     }
 
     writeFileSync(filePath, content);
@@ -61,6 +92,16 @@ interface MemoryEntry {
   key: string;
   value: string;
   updatedAt: number;
+  revisionCount?: number;
+  duplicateCount?: number;
+  verified?: boolean;
+}
+
+const MAX_VALUE_LENGTH = 120; // Progressive disclosure: truncate long values
+
+function truncateValue(value: string): string {
+  if (value.length <= MAX_VALUE_LENGTH) return value;
+  return value.slice(0, MAX_VALUE_LENGTH - 3) + '...';
 }
 
 function buildCategoryContent(category: string, memories: MemoryEntry[], sizeLimit?: number): string {
@@ -78,7 +119,8 @@ function buildDefaultContent(category: string, memories: MemoryEntry[], sizeLimi
   let content = `---\ndescription: ${description}\n---\n\n`;
 
   for (const mem of memories) {
-    const line = `- **${mem.key}**: ${mem.value}\n`;
+    const displayValue = truncateValue(mem.value);
+    const line = `- **${mem.key}**: ${displayValue}\n`;
     if (sizeLimit && Buffer.byteLength(content + line, 'utf8') > sizeLimit) break;
     content += line;
   }

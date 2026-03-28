@@ -1,0 +1,57 @@
+{
+  "name": "orch \u2014 curated-context",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {},
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12",
+      "installTools": true
+    },
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+    "TERM_SESSION_ID": "w0t0p0:E8908DF8-63B3-47C5-9019-FCE93E0939F8",
+    "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock",
+    "LC_TERMINAL_VERSION": "3.6.9",
+    "COLORFGBG": "15;0",
+    "ITERM_PROFILE": "Default",
+    "OSLogRateLimit": "64",
+    "XPC_FLAGS": "0x0",
+    "__CFBundleIdentifier": "com.googlecode.iterm2",
+    "SECURITYSESSIONID": "186bb",
+    "TERM_FEATURES": "T3LrMSc7UUw9Ts3BFGsSyHNoSxFP",
+    "TERM_PROGRAM_VERSION": "3.6.9",
+    "TERM_PROGRAM": "iTerm.app",
+    "LC_TERMINAL": "iTerm2",
+    "COLORTERM": "truecolor",
+    "COMMAND_MODE": "unix2003",
+    "TERMINFO_DIRS": "/Applications/iTerm.app/Contents/Resources/terminfo:/usr/share/terminfo",
+    "XPC_SERVICE_NAME": "0",
+    "LaunchInstanceID": "B6BFFC6D-5EDB-4F54-9B78-13BB124F08C1",
+    "__CF_USER_TEXT_ENCODING": "0x1F5:0x0:0x0",
+    "ITERM_SESSION_ID": "w0t0p0:E8908DF8-63B3-47C5-9019-FCE93E0939F8",
+    "CLOUDFLARE_API_TOKEN": "paO_dr0wMa0LtZ8HiFwPz5R10O8hNy-sARY3d-jS",
+    "CLOUDFLARE_ACCOUNT_ID": "e44dbe8cdeec83d470bb3d6f85217370",
+    "BUN_INSTALL": "/Users/joshuaodmark/.bun",
+    "WRANGLER_HOME": "/Users/joshuaodmark/.wrangler"
+  },
+  "remoteUser": "vscode",
+  "postCreateCommand": "printf 'set nocompatible\\nset backspace=indent,eol,start\\n' > ~/.vimrc && echo 'alias vim=vi' >> ~/.bashrc && echo 'export TERM=xterm-256color' >> ~/.bashrc",
+  "runArgs": [
+    "--memory=12g",
+    "--memory-swap=12g"
+  ],
+  "mounts": [
+    "source=/Users/joshuaodmark/.claude,target=/home/vscode/.claude,type=bind",
+    "source=/Users/joshuaodmark/.claude.json,target=/home/vscode/.claude.json,type=bind",
+    "source=/run/host-services/ssh-auth.sock,target=/tmp/ssh-agent.sock,type=bind",
+    "source=/Users/joshuaodmark/Apps,target=/Users/joshuaodmark/Apps,type=bind,readonly",
+    "source=/Users/joshuaodmark/Desktop,target=/Users/joshuaodmark/Desktop,type=bind,readonly",
+    "source=/Users/joshuaodmark/Downloads,target=/Users/joshuaodmark/Downloads,type=bind,readonly"
+  ]
+}

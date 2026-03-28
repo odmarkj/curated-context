@@ -86,7 +86,14 @@ ${JSON.stringify(memoriesJson)}`;
                 filePattern: existing?.filePattern,
                 createdAt: existing?.createdAt ?? now,
                 updatedAt: existing?.updatedAt ?? now,
+                lastAccessed: existing?.lastAccessed ?? now,
                 sessionId: existing?.sessionId ?? 'consolidation',
+                protected: existing?.protected,
+                topicKey: existing?.topicKey,
+                revisionCount: existing?.revisionCount,
+                contentHash: existing?.contentHash,
+                duplicateCount: existing?.duplicateCount,
+                status: 'active',
             };
         }
         store.memories = newMemories;

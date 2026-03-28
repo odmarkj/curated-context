@@ -1,0 +1,15 @@
+{
+  "name": "curated-context-test",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "remoteUser": "node",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/curated-context,type=bind",
+  "workspaceFolder": "/workspaces/curated-context",
+  "containerEnv": {
+    "CC_DIR": "/home/node/.curated-context",
+    "NODE_ENV": "test"
+  },
+  "postCreateCommand": "cd /workspaces/curated-context && npm install && npm run build",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {}
+  }
+}

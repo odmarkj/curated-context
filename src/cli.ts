@@ -3,10 +3,12 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { readFileSync, existsSync } from 'fs';
 import { isDaemonRunning, clearPid, getDataDir } from './daemon/lifecycle.js';
-import { loadStore, saveStore } from './storage/memory-store.js';
+import { loadStore, saveStore, searchMemories as ftsSearch, inferTopicKey, computeContentHash } from './storage/memory-store.js';
 import { writeRulesFiles } from './storage/rules-writer.js';
 import { writeClaudeMdSection } from './storage/claude-md.js';
 import { getQueueDepth } from './daemon/queue.js';
+import { runBackfill, printReport } from './backfill.js';
+import { seedProject } from './extraction/seed.js';
 
 const DAEMON_PORT = 7377;
 
@@ -38,13 +40,19 @@ async function main() {
       teachMemory(process.argv[3], process.argv[4], process.argv.slice(5).join(' '), isGlobal);
       break;
     case 'search':
-      searchMemories(process.argv.slice(3).join(' '));
+      cliSearchMemories(process.argv.slice(3).join(' '));
       break;
     case 'promote':
       promoteMemory(getPositionalArg(3));
       break;
     case 'consolidate':
       await triggerConsolidate();
+      break;
+    case 'backfill':
+      await runBackfillCommand();
+      break;
+    case 'seed':
+      runSeed();
       break;
     default:
       printUsage();
@@ -262,7 +270,7 @@ function promoteMemory(key: string | undefined) {
   console.log(`Promoted "${key}" from project to global store.`);
 }
 
-const VALID_CATEGORIES = ['architecture', 'design', 'api', 'conventions', 'config', 'tooling', 'gotchas'];
+const VALID_CATEGORIES = ['architecture', 'design', 'api', 'conventions', 'config', 'tooling', 'gotchas', 'infrastructure', 'data', 'preferences'];
 
 function teachMemory(category: string | undefined, key: string | undefined, value: string, isGlobal: boolean) {
   if (!category || !key || !value) {
@@ -289,7 +297,11 @@ function teachMemory(category: string | undefined, key: string | undefined, valu
     source: 'manual',
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
+    lastAccessed: now,
     sessionId: 'manual',
+    topicKey: inferTopicKey(category, key),
+    contentHash: computeContentHash(value),
+    status: 'active',
   };
   store.lastUpdated = now;
 
@@ -307,24 +319,19 @@ function teachMemory(category: string | undefined, key: string | undefined, valu
   console.log(`${action}: ${key} → ${value} (category: ${category}${isGlobal ? ', global' : ''})`);
 }
 
-function searchMemories(query: string) {
+function cliSearchMemories(query: string) {
   if (!query.trim()) {
     console.log('Usage: curated-context search <query>');
     return;
   }
 
-  const q = query.toLowerCase();
-  const projectStore = loadStore(process.cwd());
-  const globalStore = loadStore('__global__');
-
-  const projectMatches = Object.values(projectStore.memories).filter(
-    (m) => m.key.toLowerCase().includes(q) || m.value.toLowerCase().includes(q),
-  );
-  const globalMatches = Object.values(globalStore.memories).filter(
-    (m) => m.key.toLowerCase().includes(q) || m.value.toLowerCase().includes(q),
-  );
+  // Use FTS5 search
+  const projectMatches = ftsSearch(process.cwd(), query);
+  const globalMatches = ftsSearch('__global__', query);
 
   if (projectMatches.length === 0 && globalMatches.length === 0) {
+    const projectStore = loadStore(process.cwd());
+    const globalStore = loadStore('__global__');
     const projectCount = Object.keys(projectStore.memories).length;
     const globalCount = Object.keys(globalStore.memories).length;
     console.log(`No memories matching "${query}". Store has ${projectCount} project and ${globalCount} global memories.`);
@@ -372,6 +379,95 @@ async function triggerConsolidate() {
   console.log('Consolidation not yet implemented (Phase 8).');
 }
 
+function runSeed() {
+  const projectPath = getNamedArg('project') ?? process.cwd();
+  const clear = hasFlag('clear');
+
+  const store = loadStore(projectPath);
+
+  // If --clear, remove existing seed memories
+  if (clear) {
+    let cleared = 0;
+    for (const [key, mem] of Object.entries(store.memories)) {
+      if (mem.source === 'seed') {
+        delete store.memories[key];
+        cleared++;
+      }
+    }
+    if (cleared > 0) console.log(`Cleared ${cleared} existing seed memories.`);
+  }
+
+  const result = seedProject(projectPath);
+
+  if (result.memories.length === 0) {
+    console.log(`No config files found to seed from. Scanned ${result.filesScanned} files.`);
+    return;
+  }
+
+  const now = Date.now();
+  let added = 0;
+  for (const mem of result.memories) {
+    // Don't overwrite existing memories from conversation extraction (higher confidence)
+    if (store.memories[mem.key] && store.memories[mem.key].source !== 'seed') continue;
+
+    store.memories[mem.key] = {
+      key: mem.key,
+      category: mem.category,
+      value: mem.value,
+      confidence: mem.confidence,
+      source: 'seed',
+      createdAt: store.memories[mem.key]?.createdAt ?? now,
+      updatedAt: now,
+      lastAccessed: now,
+      sessionId: 'seed',
+      topicKey: inferTopicKey(mem.category, mem.key),
+      contentHash: computeContentHash(mem.value),
+      status: 'active',
+    };
+    added++;
+  }
+
+  store.lastUpdated = now;
+  saveStore(projectPath, store);
+  writeRulesFiles(projectPath, store);
+  writeClaudeMdSection(projectPath, store);
+
+  console.log(`Seeded ${added} memories from ${result.filesScanned} config files.`);
+}
+
+async function runBackfillCommand() {
+  const projectPath = getNamedArg('project') ?? process.cwd();
+  const dryRun = hasFlag('dry-run');
+  const skipApi = hasFlag('skip-api');
+  const noRateLimit = hasFlag('no-rate-limit');
+  const clear = hasFlag('clear');
+  const verbose = hasFlag('verbose');
+
+  const report = await runBackfill({
+    projectPath,
+    dryRun,
+    skipApi,
+    noRateLimit,
+    clear,
+    verbose,
+  });
+
+  if (!dryRun) {
+    printReport(report);
+  }
+}
+
+/** Get the value after a --name flag */
+function getNamedArg(name: string): string | undefined {
+  const flag = `--${name}`;
+  const idx = process.argv.indexOf(flag);
+  if (idx !== -1 && idx + 1 < process.argv.length) {
+    const val = process.argv[idx + 1];
+    if (!val.startsWith('-')) return val;
+  }
+  return undefined;
+}
+
 function printUsage() {
   console.log(`curated-context — Intelligent memory sidecar for Claude Code
 
@@ -385,6 +481,15 @@ Usage:
   curated-context search <query>      Search memories by keyword
   curated-context promote <key>       Move a project memory to global store
   curated-context consolidate         Force memory consolidation
+  curated-context seed [--clear]      Bootstrap memories from project configs
+  curated-context backfill            Import claude-mem session history
+
+Backfill flags:
+  --project <path>  Target project path (defaults to cwd)
+  --skip-api        Only use free extraction tiers (no Claude API calls)
+  --clear           Wipe existing memories before backfill
+  --verbose         Show per-session details
+  --dry-run         List sessions without processing
 
 Flags:
   --global, -g    Target the global memory store instead of project`);

@@ -31,17 +31,23 @@
 
 ## The Problem
 
-Every time you start a new Claude Code session, it starts from scratch. It doesn't remember that:
+Claude Code doesn't automatically remember the things that matter across sessions. It doesn't know that:
 
 - Your brand uses **Inter for headings** and **#2563EB as the primary color**
 - Your API follows **RESTful conventions with a /api/v1/ prefix**
 - You chose **Drizzle over Prisma** after careful evaluation
 - Your React components use **compound pattern with forwardRef**
-- That edge case in the payment flow that took you two hours to debug
+- That edge case in the payment flow that took two hours to debug
+- Your fleet runs on **3 Hetzner CX41 boxes behind a Caddy reverse proxy**
+- You rejected Kubernetes in favor of **Kamal because the team is 2 people**
+- The staging database is on **10.0.1.5:5432**, not the same host as prod
+- You switched from **S3 to MinIO** for self-hosted object storage last month
+- CI deploys are blocked until the **Playwright E2E suite passes on `main`**
+- The monorepo has a shared `packages/ui` that every app imports — don't create duplicate components
 
-There are many times when curated context can save significant time, frustration, and make Claude Code feel like magic. Take a website application project — the branding guide that defines colors, fonts, and layout may not always be defined upfront. Even if it was, it may not always be included in the context. It may change over time. If these details aren't in the context and you ask Claude Code to build a new page, it will often pick an entirely different theme, colors, fonts, and layout than what your application already uses.
+Yes, Claude Code has built-in ways to persist information. You can write to `CLAUDE.md`, use `.claude/rules/` files, or tell Claude to "remember this" and it saves to `MEMORY.md`. These work — but they require you to **stop what you're doing and manually curate**. In practice, you capture maybe 10% of what matters. The important architecture decision made in passing at minute 40 of a session? Gone. The infrastructure detail mentioned while debugging? Never saved. The convention that emerged organically across three sessions? Nobody wrote it down.
 
-You end up re-explaining the same decisions in every session. Over and over.
+curated-context is that same concept — `CLAUDE.md`, rules files, memory — but **automatic, exhaustive, and intelligent**. It passively watches every session, extracts the decisions that matter, deduplicates and evolves them over time, and writes them exactly where Claude already reads. Zero effort, zero missed context.
 
 ### Where curated-context fits
 
@@ -49,13 +55,14 @@ Claude Code has a growing memory ecosystem. Each layer serves a different purpos
 
 | Layer | How it works | What it's good at |
 |-------|-------------|-------------------|
-| **Built-in memory** | You tell Claude "remember this" and it writes to `CLAUDE.md` | Explicit, intentional notes you want Claude to keep |
+| **Built-in memory** | You tell Claude "remember this" and it writes to `CLAUDE.md` / `MEMORY.md` | Explicit, intentional notes — things you know are important in the moment |
+| **`.claude/rules/`** | You or Claude manually create rule files | Static project conventions and instructions |
 | **[claude-mem](https://github.com/thedotmack/claude-mem)** | Cross-session search over past conversations | Recalling *what you discussed* — finding prior work, decisions, and context from old sessions |
-| **curated-context** (this plugin) | Passively extracts high-value information from every session | Automatically remembering *project knowledge* — design tokens, architecture choices, API patterns, conventions, and gotchas |
+| **curated-context** (this plugin) | Passively extracts high-value information from every session | Automatically remembering *project knowledge* — design tokens, architecture choices, infrastructure, API patterns, conventions, and gotchas |
 
-Built-in memory requires you to stop and say "remember this." claude-mem lets you search your history. **curated-context fills the gap between them** — it watches your conversations and silently captures the decisions that matter, so the next session starts with full context without you lifting a finger.
+The built-in tools require you to stop and explicitly save. That's fine for things you know are important — but most project knowledge emerges organically from conversations and you don't realize it was important until it's needed again. curated-context **fills that gap** — it watches your conversations silently, captures the decisions that matter, deduplicates them as they evolve, and writes them where Claude already reads. The next session starts with full context without you lifting a finger.
 
-All three can run together. They complement each other.
+All of these layers can run together. They complement each other.
 
 ---
 
@@ -99,7 +106,7 @@ curated-context uses a **4-tier cascading pipeline** designed to minimize API co
 |------|---------|
 | `.claude/rules/cc-*.md` | Categorized context files, auto-loaded by Claude Code |
 | `CLAUDE.md` | Brief summary section with markers |
-| `~/.curated-context/store/` | JSON backing store (source of truth) |
+| `~/.curated-context/store/` | SQLite backing store with FTS5 search (source of truth) |
 
 ---
 
@@ -123,7 +130,7 @@ Claude Code Session
        |──> Tier 4: Claude Sonnet API (rate-limited last resort)
        |
        v
-[Memory Store] ── JSON at ~/.curated-context/store/
+[Memory Store] ── SQLite + FTS5 at ~/.curated-context/store/
        |
        |──> .claude/rules/cc-{category}.md
        |──> CLAUDE.md (marker section)

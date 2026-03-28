@@ -47,7 +47,7 @@ describe('parseExtractionResponse', () => {
     expect(result.global_memories).toHaveLength(0);
   });
 
-  it('limits to 10 project memories and 5 global memories', () => {
+  it('limits to 15 project memories and 10 global memories', () => {
     const makeMemories = (n: number) =>
       Array.from({ length: n }, (_, i) => ({
         category: 'design',
@@ -57,13 +57,13 @@ describe('parseExtractionResponse', () => {
       }));
 
     const response = JSON.stringify({
-      project_memories: makeMemories(15),
-      global_memories: makeMemories(8),
+      project_memories: makeMemories(20),
+      global_memories: makeMemories(15),
       supersedes: [],
     });
     const result = parseExtractionResponse(response);
-    expect(result.project_memories.length).toBeLessThanOrEqual(10);
-    expect(result.global_memories.length).toBeLessThanOrEqual(5);
+    expect(result.project_memories.length).toBeLessThanOrEqual(15);
+    expect(result.global_memories.length).toBeLessThanOrEqual(10);
   });
 
   it('returns empty arrays for non-JSON response', () => {

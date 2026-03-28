@@ -18,10 +18,10 @@ try {
     `[${new Date().toISOString()}] capture.js invoked\n`);
 } catch { /* best effort */ }
 
-// Read hook input from stdin
+// Read hook input from stdin (fd 0) — works in both shell pipes and spawned processes
 let stdinData = '';
 try {
-  stdinData = readFileSync('/dev/stdin', 'utf8');
+  stdinData = readFileSync(0, 'utf8');
 } catch {
   process.exit(0);
 }

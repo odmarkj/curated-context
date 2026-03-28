@@ -17,12 +17,17 @@
     "test:watch": "vitest",
     "test:unit": "vitest run test/unit/",
     "test:integration": "vitest run test/integration/",
-    "test:e2e": "RUN_E2E=1 vitest run test/e2e/"
+    "test:container": "vitest run --config vitest.container.config.ts",
+    "test:e2e": "RUN_E2E=1 vitest run test/e2e/",
+    "test:all": "npm run test && npm run test:container",
+    "devcontainer:test": "devcontainer exec --workspace-folder . npm run test:container"
   },
   "dependencies": {
+    "better-sqlite3": "^12.8.0",
     "express": "^5.1.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0",

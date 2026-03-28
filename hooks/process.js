@@ -17,7 +17,7 @@ const DAEMON_PORT = parseInt(process.env.CC_PORT || '7377', 10);
 // Parse stdin for hook input (may contain cwd/session_id)
 let hookInput = {};
 try {
-  const stdinData = readFileSync('/dev/stdin', 'utf8');
+  const stdinData = readFileSync(0, 'utf8');
   if (stdinData.trim()) {
     hookInput = JSON.parse(stdinData);
   }

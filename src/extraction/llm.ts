@@ -35,9 +35,9 @@ interface ApiUsage {
   callsByProject: Record<string, number>;
 }
 
-const MAX_CALLS_PER_HOUR = 30;
-const MAX_CALLS_PER_SESSION = 10;
-const PROJECT_COOLDOWN_MS = 60 * 1000; // 1 minute
+const MAX_CALLS_PER_HOUR = 120;
+const MAX_CALLS_PER_SESSION = 30;
+const PROJECT_COOLDOWN_MS = 0;
 
 /**
  * Classification via `claude -p` (uses Claude Code subscription, no API key needed).
@@ -47,9 +47,10 @@ export async function extractWithClaude(
   messages: ConversationMessage[],
   existingMemories: Record<string, { key: string; value: string }>,
   projectRoot: string,
+  options?: { skipRateLimit?: boolean },
 ): Promise<ExtractionResult | null> {
-  // Check rate limits
-  if (!canMakeApiCall(projectRoot)) {
+  // Check rate limits (skipped during backfill --no-rate-limit)
+  if (!options?.skipRateLimit && !canMakeApiCall(projectRoot)) {
     return null;
   }
 
@@ -109,11 +110,11 @@ function runClaude(prompt: string, env: NodeJS.ProcessEnv): Promise<string> {
     child.stdin.write(prompt);
     child.stdin.end();
 
-    // Timeout after 60 seconds
+    // Timeout after 120 seconds
     setTimeout(() => {
       child.kill('SIGTERM');
-      reject(new Error('claude -p timed out after 60s'));
-    }, 60_000);
+      reject(new Error('claude -p timed out after 120s'));
+    }, 120_000);
   });
 }
 
@@ -131,10 +132,10 @@ export function parseExtractionResponse(text: string): ExtractionResult {
     const result: ExtractionResult = {
       project_memories: (parsed.project_memories ?? [])
         .filter((m: Memory) => m.confidence >= 0.7)
-        .slice(0, 10),
+        .slice(0, 15),
       global_memories: (parsed.global_memories ?? [])
         .filter((m: Memory) => m.confidence >= 0.7)
-        .slice(0, 5),
+        .slice(0, 10),
       supersedes: parsed.supersedes ?? [],
     };
 
@@ -204,11 +205,6 @@ function canMakeApiCall(projectRoot: string): boolean {
   // Check per-session limit (approximated by per-project count this hour)
   const projectCalls = usage.callsByProject[projectRoot] ?? 0;
   if (projectCalls >= MAX_CALLS_PER_SESSION) {
-    return false;
-  }
-
-  // Check project cooldown
-  if (usage.lastCallTime && now - usage.lastCallTime < PROJECT_COOLDOWN_MS) {
     return false;
   }
 

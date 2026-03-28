@@ -19,6 +19,8 @@ export interface ExtractionResult {
 export declare function extractWithClaude(messages: ConversationMessage[], existingMemories: Record<string, {
     key: string;
     value: string;
-}>, projectRoot: string): Promise<ExtractionResult | null>;
+}>, projectRoot: string, options?: {
+    skipRateLimit?: boolean;
+}): Promise<ExtractionResult | null>;
 export declare function parseExtractionResponse(text: string): ExtractionResult;
 //# sourceMappingURL=llm.d.ts.map
