@@ -1,0 +1,3 @@
+ the worktree, and force-adding needs a commit, which I'm told not to make. The orchestrator would also need to commit with `-f`.
+
+Option (a) is the simpler fix and matches how this project currently uses the file. If other projects in the rollout exclude `.orch/` the same way, they'll hit this too.
