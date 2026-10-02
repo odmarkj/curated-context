@@ -1,0 +1,5 @@
+ding"
+note  = "Agent executor switched to asha (portfolio-wide rollout)."
+```
+
+If you want `.orch/project.toml` tracked in git so it goes through PRs instead, `.orch/` has to come out of `.git/info/exclude` first. Other projects in the rollout that exclude `.orch/` will likely have the same problem.
